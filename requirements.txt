@@ -1,0 +1,15 @@
+fastapi>=0.115,<1.0
+google-genai>=1.0,<3.0
+httpx>=0.28,<1.0
+openai>=2.0,<3.0
+llama-index-core>=0.14,<1.0
+llama-index-embeddings-openai>=0.5,<1.0
+llama-index-vector-stores-postgres>=0.7,<1.0
+psycopg[binary]>=3.2,<4.0
+psycopg-pool>=3.2,<4.0
+pgvector>=0.4,<1.0
+pydantic>=2.10,<3.0
+python-dotenv>=1.0,<2.0
+uvicorn[standard]>=0.34,<1.0
+langgraph>=1.0,<2.0
+pypdf>=5.0,<7.0

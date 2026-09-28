@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="zh-Hant" data-workspace-id="default">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="TackyFlow AI 內容工作台" />
+    <title>TackyFlow｜AI 內容工作台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=20260926-48" />
+  </head>
+  <body>
+    <section id="authScreen" class="auth-screen hidden" aria-label="登入">
+      <div class="auth-card">
+        <div class="auth-brand"><span>T</span><div><strong>TackyFlow</strong><small>AI Content OS</small></div></div>
+        <div><span class="section-kicker">安全工作區</span><h1 id="authTitle">登入 TackyFlow</h1><p id="authDescription">登入後才能存取你的內容與工作區。</p></div>
+        <form id="authForm" autocomplete="on">
+          <label id="authNameField" class="field hidden"><span>顯示名稱</span><input id="authDisplayName" name="name" maxlength="100" autocomplete="name" /></label>
+          <label class="field"><span>電子郵件</span><input id="authEmail" name="username" type="email" maxlength="254" autocomplete="username" required /></label>
+          <label class="field"><span>密碼</span><input id="authPassword" name="password" type="password" minlength="12" maxlength="128" autocomplete="current-password" required /><small>至少 12 個字元。</small></label>
+          <button id="forgotPasswordButton" class="auth-link" type="button">忘記密碼？</button>
+          <label class="auth-remember" for="rememberCredentials">
+            <input id="rememberCredentials" type="checkbox" />
+            <span><strong>記住登入資料</strong><small>本機只記住電子郵件；密碼由瀏覽器或系統密碼管理器安全保存。</small></span>
+          </label>
+          <div id="authMessage" class="auth-message" role="status" aria-live="polite"></div>
+          <button id="authSubmitButton" class="primary-button" type="submit">登入</button>
+        </form>
+        <form id="passwordResetRequestForm" class="hidden" autocomplete="on">
+          <label class="field"><span>電子郵件</span><input id="passwordResetEmail" type="email" maxlength="254" autocomplete="email" required /></label>
+          <div id="passwordResetRequestMessage" class="auth-message" role="status" aria-live="polite"></div>
+          <button id="passwordResetRequestButton" class="primary-button" type="submit">寄送重設連結</button>
+          <button class="auth-link" data-return-to-login type="button">← 返回登入</button>
+        </form>
+        <form id="passwordResetConfirmForm" class="hidden" autocomplete="off">
+          <label class="field"><span>新密碼</span><input id="passwordResetNewPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /><small>至少 12 個字元。</small></label>
+          <label class="field"><span>再次輸入新密碼</span><input id="passwordResetConfirmPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /></label>
+          <div id="passwordResetConfirmMessage" class="auth-message" role="status" aria-live="polite"></div>
+          <button id="passwordResetConfirmButton" class="primary-button" type="submit">儲存新密碼</button>
+          <button class="auth-link" data-return-to-login type="button">取消並返回登入</button>
+        </form>
+      </div>
+    </section>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主要導覽">
+        <div class="brand">
+          <div class="brand-mark">T</div>
+          <div>
+            <strong>TackyFlow</strong>
+            <span>AI Content OS</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <p class="nav-label">內容工作流</p>
+          <button id="dashboardNav" class="nav-item" data-page="dashboard"><span class="nav-icon">⌂</span>工作總覽</button>
+          <button id="opportunitiesNav" class="nav-item" data-page="opportunities"><span class="nav-icon">◎</span>內容機會</button>
+          <button id="planNav" class="nav-item" data-page="plan"><span class="nav-icon">▦</span>內容計畫</button>
+          <button id="workbenchNav" class="nav-item active" data-page="workbench"><span class="nav-icon">✦</span>AI 內容工作台<span class="nav-pill">新</span></button>
+          <button id="assetsNav" class="nav-item" data-page="assets"><span class="nav-icon">▣</span>素材中心</button>
+          <button id="publishingNav" class="nav-item" data-page="publishing"><span class="nav-icon">↗</span>發布中心</button>
+          <p class="nav-label nav-label-secondary">分析與設定</p>
+          <button id="performanceNav" class="nav-item" data-page="performance"><span class="nav-icon">⌁</span>成效回顧</button>
+          <button id="settingsNav" class="nav-item" data-page="settings"><span class="nav-icon">⚙</span>系統設定</button>
+        </nav>
+
+        <div id="engineStatus" class="sidebar-status checking">
+          <div class="status-dot"></div>
+          <div>
+            <strong>Python Engine</strong>
+            <span id="engineStatusText">正在檢查本機服務…</span>
+          </div>
+          <button id="engineReconnectButton" class="engine-reconnect hidden" type="button">重新連線</button>
+        </div>
+        <div class="user-card">
+          <div class="avatar">TY</div>
+          <div><strong id="currentUserName">內容團隊</strong><span id="currentUserRole">工作區管理員</span><select id="workspaceSwitcher" class="workspace-switcher" aria-label="切換工作區"></select></div>
+          <button id="logoutButton" class="logout-button hidden" type="button" title="登出" aria-label="登出">↪</button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button id="mobileNavToggle" class="icon-button mobile-nav-toggle" type="button" aria-label="開啟導覽" aria-expanded="false">☰</button>
+          <div class="breadcrumbs"><span>工作流程</span><b>›</b><strong>AI 內容工作台</strong></div>
+          <div class="top-actions">
+            <span class="mode-badge"><i></i>自動代理模式</span>
+            <button id="notificationButton" class="icon-button" aria-label="通知" aria-expanded="false">♢<span class="notification-dot"></span></button>
+          </div>
+          <aside id="notificationPanel" class="notification-panel hidden" aria-label="通知中心"><strong>通知中心</strong><p id="notificationSummary">目前沒有待處理通知。</p><button class="text-button" data-page-link="plan" type="button">查看內容計畫 →</button></aside>
+        </header>
+        <button id="mobileNavBackdrop" class="mobile-nav-backdrop hidden" type="button" aria-label="關閉導覽"></button>
+
+        <div class="workspace">
+          <section id="dashboardPage" class="app-page hidden" aria-label="工作總覽">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span>⌂</span> CONTENT OPERATIONS</div>
+                <h1>工作總覽</h1>
+                <p>掌握內容任務、待核准工作與各階段執行狀態。</p>
+              </div>
+              <button class="primary-button page-start-task" type="button">＋ 建立內容任務</button>
+            </div>
+            <div id="dashboardMetrics" class="overview-metrics"></div>
+            <div class="overview-grid">
+              <section class="panel overview-section">
+                <div class="overview-section-header"><div><span class="section-kicker">需要關注</span><h2>待處理任務</h2></div><button class="text-button" data-page-link="plan">查看計畫 →</button></div>
+                <div id="dashboardAttentionList" class="overview-list"></div>
+              </section>
+              <section class="panel overview-section">
+                <div class="overview-section-header"><div><span class="section-kicker">最近更新</span><h2>最新內容</h2></div><button class="text-button" data-page-link="workbench">前往工作台 →</button></div>
+                <div id="dashboardRecentList" class="overview-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="opportunitiesPage" class="app-page hidden" aria-label="內容機會">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span>◎</span> CONTENT DISCOVERY</div>
+                <h1>內容機會</h1>
+                <p>用清楚可追溯的條件探索內容角度，收藏比較後再帶入 AI 工作台。</p>
+              </div>
+              <button id="opportunityHistoryToggle" class="secondary-button hidden" type="button">◷ 探索紀錄</button>
+            </div>
+            <div class="opportunity-layout">
+              <div class="opportunity-main">
+                <section class="panel opportunity-generator">
+                  <div class="opportunity-generator-heading">
+                    <div>
+                      <span class="section-kicker">探索主題</span>
+                      <h2>你想從哪個關鍵字開始？</h2>
+                      <p>所有生成條件都會明確顯示，不會偷偷沿用上一筆任務。</p>
+                    </div>
+                    <span id="opportunityProviderBadge" class="transparent-mode-badge" aria-label="內容機會分析進度">0%</span>
+                  </div>
+                  <form id="opportunityForm" class="opportunity-form">
+                    <div class="opportunity-seed-row">
+                      <label class="opportunity-field opportunity-seed-field">
+                        <span>主題或關鍵字 *</span>
+                        <input id="opportunitySeed" maxlength="200" required placeholder="例如：AI 內容工作流" />
+                      </label>
+                      <button id="opportunityGenerateButton" class="primary-button" type="submit">產生內容機會</button>
+                    </div>
+                    <div id="opportunityProgress" class="opportunity-progress hidden" role="status" aria-live="polite">
+                      <div><strong id="opportunityProgressLabel">正在準備分析</strong><span id="opportunityProgressPercent">0%</span></div>
+                      <div class="opportunity-progress-track" aria-hidden="true"><span id="opportunityProgressBar"></span></div>
+                      <small id="opportunityProgressDetail">正在整理主題、受眾與探索條件。</small>
+                    </div>
+                    <details id="opportunityAdvanced" class="opportunity-advanced" open>
+                      <summary><span>探索條件與參考資料</span><small>可收合 · 目前條件會隨紀錄保存</small></summary>
+                      <div class="opportunity-advanced-body">
+                        <div class="opportunity-field-grid">
+                          <label class="opportunity-field"><span>目標受眾</span><input id="opportunityAudience" maxlength="300" placeholder="例如：剛開始經營短影音的品牌行銷人" /></label>
+                          <label class="opportunity-field"><span>內容目標</span><select id="opportunityGoal"><option value="education">知識教育</option><option value="awareness">品牌認知</option><option value="conversion">轉換推廣</option><option value="community">社群互動</option><option value="news_reaction">新聞快評</option><option value="unboxing_review">開箱測評</option></select></label>
+                          <label class="opportunity-field"><span>偏好形式</span><select id="opportunityFormat"><option value="short_video">短影音腳本</option><option value="long_video">長影音腳本</option><option value="short_text_post">短貼文</option><option value="thread">串文</option><option value="long_text_article">長文文章</option><option value="carousel_slides">圖文輪播</option></select></label>
+                          <label class="opportunity-field"><span>結果數量</span><select id="opportunityCount"><option value="4">4 個角度</option><option value="5">5 個角度</option><option value="6">6 個角度</option><option value="7">7 個角度</option><option value="8">8 個角度</option></select></label>
+                          <label class="opportunity-field"><span>地區</span><input id="opportunityRegion" maxlength="100" value="台灣" placeholder="例如：台灣、香港、全球" /></label>
+                          <label class="opportunity-field"><span>語言</span><select id="opportunityLanguage"><option value="zh-Hant">繁體中文</option><option value="zh-Hans">簡體中文</option><option value="en">英文</option></select></label>
+                          <label class="opportunity-field"><span>品牌名稱</span><input id="opportunityBrandName" maxlength="120" placeholder="選填" /></label>
+                          <label class="opportunity-field"><span>品牌語氣</span><input id="opportunityBrandVoice" maxlength="500" value="專業、清楚，但保有自然的對話感" /></label>
+                        </div>
+                        <fieldset class="opportunity-platforms">
+                          <legend>發布平台 *</legend>
+                          <div>
+                            <label class="opportunity-platform-chip selected"><input type="checkbox" value="youtube" checked />YouTube</label>
+                            <label class="opportunity-platform-chip selected"><input type="checkbox" value="instagram" checked />Instagram</label>
+                            <label class="opportunity-platform-chip"><input type="checkbox" value="threads" />Threads</label>
+                          </div>
+                        </fieldset>
+                        <div class="opportunity-field-grid opportunity-text-grid">
+                          <label class="opportunity-field"><span>品牌 Brief</span><textarea id="opportunityBrandBrief" placeholder="品牌定位、價值主張、不可違反事項"></textarea></label>
+                          <label class="opportunity-field"><span>限制與注意事項</span><textarea id="opportunityConstraints" placeholder="每行一項，例如：不得宣稱未經證實的成效"></textarea></label>
+                          <label class="opportunity-field"><span>參考文字</span><textarea id="opportunityReferenceText" placeholder="貼上自家內容或希望參考的文字；系統只提取高層次特徵"></textarea></label>
+                          <label class="opportunity-field"><span>參考網址</span><textarea id="opportunityReferenceUrls" placeholder="每行一個網址；目前只保存來源，不代表已讀取即時內容"></textarea></label>
+                        </div>
+                      </div>
+                    </details>
+                  </form>
+                </section>
+                <div id="opportunityMessage" class="message-bar" role="status" aria-live="polite"></div>
+                <section id="opportunityContext" class="opportunity-context hidden" aria-label="生成依據"></section>
+                <section id="opportunityCompare" class="panel opportunity-compare hidden" aria-label="收藏比較"></section>
+                <div class="opportunity-result-toolbar">
+                  <div><strong id="opportunityResultTitle">探索結果</strong><span id="opportunityResultMeta">尚未產生內容機會</span></div>
+                  <div>
+                    <button id="opportunityCompareButton" class="secondary-button hidden" type="button">比較收藏</button>
+                    <button id="opportunityMoreButton" class="secondary-button hidden" type="button">再產生一批</button>
+                  </div>
+                </div>
+                <div id="opportunityList" class="opportunity-grid"><div class="library-empty"><strong>先設定探索條件</strong><p>產生後會保留完整紀錄，重新整理也不會消失。</p></div></div>
+              </div>
+              <aside id="opportunityHistoryPanel" class="panel opportunity-history-panel" aria-label="內容機會探索紀錄">
+                <div class="opportunity-history-header">
+                  <div><span class="section-kicker">永久紀錄</span><h2>探索紀錄</h2></div>
+                  <button id="opportunityHistoryClose" class="icon-button" type="button" aria-label="收合探索紀錄">×</button>
+                </div>
+                <label class="opportunity-history-filter"><span>篩選紀錄</span><input id="opportunityHistoryFilter" type="search" placeholder="搜尋主題、供應者或狀態" /></label>
+                <div id="opportunityHistoryList" class="opportunity-history-list"><div class="history-empty">正在讀取紀錄…</div></div>
+              </aside>
+            </div>
+          </section>
+
+          <section id="planPage" class="app-page hidden" aria-label="內容計畫">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span>▦</span> PIPELINE PLANNING</div>
+                <h1>內容計畫</h1>
+                <p>用 Pipeline 檢視每個任務目前所在階段與下一步。</p>
+              </div>
+              <button class="primary-button page-start-task" type="button">＋ 新增計畫</button>
+            </div>
+            <div id="planSummary" class="plan-summary"></div>
+            <div id="planMessage" class="message-bar" role="status" aria-live="polite"></div>
+            <div id="pipelineBoard" class="pipeline-board"></div>
+          </section>
+
+          <section id="assetsPage" class="app-page hidden" aria-label="素材中心">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span>▣</span> CONTENT LIBRARY</div>
+                <h1>素材中心</h1>
+                <p>集中管理逐字稿、參考分析與製作素材包，快速找到可再利用的內容。</p>
+              </div>
+              <button class="primary-button page-start-task" type="button">＋ 建立新素材</button>
+            </div>
+            <section class="asset-guide" aria-label="素材中心使用導覽">
+              <div class="asset-guide-intro"><span class="section-kicker">快速導覽</span><strong>每張卡片代表一個完整內容任務</strong><p>展開「逐段製作對照」，即可從每段旁白一路查看對應分鏡、畫面方向與 B-roll 建議。</p></div>
+              <div class="asset-guide-types">
+                <article><i class="script">稿</i><div><strong>完整逐字稿</strong><span>可直接交付、錄音或改寫</span></div></article>
+                <article><i class="production">製</i><div><strong>製作素材包</strong><span>分鏡、視覺與平台文案</span></div></article>
+                <article><i class="reference">參</i><div><strong>參考分析</strong><span>品牌規範、來源與創作依據</span></div></article>
+              </div>
+            </section>
+            <section class="asset-pacing-guide" aria-label="B-roll 剪輯節奏設定">
+              <div class="asset-pacing-heading">
+                <div><span class="section-kicker">官方原則轉換</span><strong>B-roll 剪輯節奏</strong><p>以 YouTube 的前段承諾與續看率、TikTok 的 Hook／Body／Close 原則作為初始基準；發布後仍應依實際留存調整。</p></div>
+                <label><span>套用影片類型</span><select id="assetPacingProfile"><option value="auto">依任務自動判斷</option><option value="short">短影音（30–60 秒）</option><option value="review">開箱／評測（60–180 秒）</option><option value="long">教學／長影片（3 分鐘以上）</option></select></label>
+              </div>
+              <div id="assetPacingSummary" class="asset-pacing-summary"></div>
+              <footer><span>畫面變化必須增加證據、解釋、情境或情緒價值，不是為換畫面而換畫面。</span><span><a href="https://support.google.com/youtube/answer/9314415?hl=zh-Hant" target="_blank" rel="noreferrer">YouTube 續看率指南 ↗</a><a href="https://ads.tiktok.com/business/creativecenter/quicktok/online/tiktok_creative_accelerator/pc/en" target="_blank" rel="noreferrer">TikTok Creative Guidance ↗</a></span></footer>
+            </section>
+            <div id="assetMetrics" class="overview-metrics asset-metrics"></div>
+            <section class="panel library-toolbar" aria-label="素材篩選">
+              <label class="library-search"><span>搜尋素材</span><input id="assetSearch" type="search" placeholder="搜尋主題、平台或素材內容" /></label>
+              <label><span>包含的素材</span><select id="assetTypeFilter"><option value="all">全部內容任務</option><option value="script">包含完整逐字稿</option><option value="production">包含製作素材包</option><option value="reference">包含參考分析</option></select></label>
+              <label><span>任務狀態</span><select id="assetStatusFilter"><option value="all">全部狀態</option><option value="completed">已完成</option><option value="waiting_for_human">等待核准</option><option value="cancelled">已退回</option></select></label>
+            </section>
+            <div id="assetMessage" class="message-bar" role="status" aria-live="polite"></div>
+            <div id="assetGrid" class="asset-grid"></div>
+          </section>
+
+          <div id="assetPreviewModal" class="asset-preview-modal hidden" role="dialog" aria-modal="true" aria-labelledby="assetPreviewModalTitle">
+            <button class="asset-preview-backdrop" type="button" data-close-asset-preview aria-label="關閉素材預覽"></button>
+            <section class="asset-preview-dialog">
+              <header>
+                <div><span id="assetPreviewModalKind" class="asset-kind"></span><h2 id="assetPreviewModalTitle">素材預覽</h2><p id="assetPreviewModalMeta"></p></div>
+                <button class="icon-button" type="button" data-close-asset-preview aria-label="關閉素材預覽">×</button>
+              </header>
+              <pre id="assetPreviewModalContent" class="asset-preview-content"></pre>
+              <footer>
+                <div><button id="assetPreviewDownload" class="secondary-button" type="button">下載 TXT</button><button id="assetPreviewExport" class="secondary-button" type="button">匯出 JSON</button></div>
+                <button id="assetPreviewOpenWorkflow" class="primary-button" type="button">開啟原始任務</button>
+              </footer>
+            </section>
+          </div>
+
+          <section id="publishingPage" class="app-page hidden" aria-label="發布中心">
+            <div class="page-heading">
+              <div>
+                <div class="eyebrow"><span>↗</span> PUBLISHING OPERATIONS</div>
+                <h1>發布中心</h1>
+                <p>整理發布包、安排時間，前往平台人工發布後回來登記結果。</p>
+              </div>
+              <span class="integration-badge"><i></i>半自動發布模式</span>
+            </div>
+            <section class="integration-notice">
+              <div><strong>三步驟完成發布</strong><p>① 下載發布包或複製文案　② 前往平台人工發布　③ 貼回公開網址並確認完成。系統不會保存平台帳密。</p></div>
+              <span>安全 MVP</span>
+            </section>
+            <div id="publishingMetrics" class="overview-metrics publishing-metrics"></div>
+            <section class="panel publishing-toolbar" aria-label="發布篩選">
+              <div><span class="section-kicker">發布佇列</span><h2>內容發布狀態</h2></div>
+              <label><span>顯示</span><select id="publishingStatusFilter"><option value="all">全部內容</option><option value="awaiting">等待核准</option><option value="ready">可發布</option><option value="returned">退回修改</option><option value="scheduled">已排程</option><option value="publishing">人工發布中</option><option value="published">已發布</option><option value="failed">發布失敗</option><option value="blocked">工作流已退回</option><option value="archived">已封存</option></select></label>
+            </section>
+            <div id="publishingMessage" class="message-bar" role="status" aria-live="polite"></div>
+            <div id="publishingList" class="publishing-list"></div>
+          </section>
+
+          <section id="performancePage" class="app-page hidden" aria-label="成效回顧">
+            <div class="page-heading"><div><div class="eyebrow"><span>⌁</span> PERFORMANCE REVIEW</div><h1>成效回顧</h1><p>先追蹤流程完成率、人工介入與發布進度；串接外部平台後再補觸及與轉換。</p></div></div>
+            <div id="performanceMetrics" class="overview-metrics"></div>
+            <section class="panel simple-info-panel"><span class="section-kicker">資料範圍</span><h2>目前為工作流成效</h2><p>這裡只使用本機任務紀錄，不會把排程狀態誤當成真實觸及、觀看或轉換。外部平台尚未串接，因此相關指標會明確顯示為「尚無資料」。</p></section>
+          </section>
+
+          <section id="settingsPage" class="app-page hidden" aria-label="系統設定">
+            <div class="page-heading"><div><div class="eyebrow"><span>⚙</span> SYSTEM SETTINGS</div><h1>系統設定</h1><p>查看目前執行環境、驗證邊界與資料保存方式。</p></div></div>
+            <div id="settingsContent" class="settings-grid"></div>
+            <section id="betaUsagePanel" class="panel beta-usage-panel hidden" aria-label="Beta 使用總覽">
+              <div class="prompt-center-header">
+                <div><span class="section-kicker">PLATFORM OWNER · BETA INSIGHTS</span><h2>Beta 使用總覽</h2><p>跨 Workspace 查看測試者活躍、工作流、AI 用量、失敗與回饋。只保存操作事件與統計，不顯示密碼、API Key、完整 Brief 或上傳文件內容。</p></div>
+                <span class="owner-only-badge">只有你能查看</span>
+              </div>
+              <div class="beta-usage-toolbar">
+                <label><span>統計期間</span><select id="betaUsageDays"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option></select></label>
+                <button id="refreshBetaUsage" class="secondary-button" type="button">重新整理</button>
+              </div>
+              <div id="betaUsageMessage" class="message-bar" role="status" aria-live="polite"></div>
+              <div id="betaUsageContent"><div class="prompt-empty">正在讀取 Beta 使用資料…</div></div>
+              <section class="beta-usage-section beta-bug-admin" aria-label="Beta 問題回報">
+                <div class="beta-bug-heading"><div><h3>Beta 問題回報</h3><p>查看跨 Workspace 的問題、截圖與處理狀態。</p></div><label><span>狀態</span><select id="bugReportStatusFilter"><option value="">全部</option><option value="new">待處理</option><option value="reviewing">處理中</option><option value="resolved">已解決</option><option value="dismissed">不處理</option></select></label></div>
+                <div id="betaBugReports"><div class="prompt-empty">正在讀取問題回報…</div></div>
+              </section>
+            </section>
+            <section id="workspaceAIProfilePanel" class="panel workspace-ai-profile-panel hidden" aria-label="Workspace 品牌 AI 設定">
+              <div class="prompt-center-header">
+                <div><span class="section-kicker">WORKSPACE BRAND LAYER</span><h2>Workspace 品牌 AI 設定</h2><p>在平台核心 Prompt 上補充這個工作區的品牌個性。這一層只能調整語氣、受眾、詞彙、CTA 與視覺偏好，不能覆蓋安全、事實或核准規則。</p></div>
+                <span class="workspace-layer-badge">Workspace 專屬</span>
+              </div>
+              <form id="workspaceAIProfileForm" class="workspace-ai-profile-form">
+                <div class="field-row"><label><span>品牌名稱</span><input id="workspaceBrandName" maxlength="120" placeholder="例如：TackyFlow" /></label><label><span>主要受眾</span><input id="workspaceTargetAudience" maxlength="1000" placeholder="例如：需要穩定產出內容的小型品牌團隊" /></label></div>
+                <label><span>品牌定位</span><textarea id="workspaceBrandPositioning" maxlength="1000" placeholder="品牌提供什麼價值，以及和其他品牌的差異。"></textarea></label>
+                <label><span>語氣與調性</span><textarea id="workspaceTone" maxlength="1000" placeholder="例如：專業、直接、自然台灣口語；避免權威說教。"></textarea></label>
+                <div class="field-row"><label><span>偏好用詞</span><textarea id="workspacePreferredVocabulary" maxlength="3000" placeholder="每行一項"></textarea></label><label><span>禁用詞與禁用表達</span><textarea id="workspaceForbiddenPhrases" maxlength="3000" placeholder="每行一項"></textarea></label></div>
+                <label><span>預設 CTA</span><textarea id="workspaceDefaultCTA" maxlength="1000" placeholder="例如：邀請觀眾留言分享自己的使用情境。"></textarea></label>
+                <section class="workspace-snippet-manager" aria-labelledby="workspaceSnippetTitle">
+                  <header><div><strong id="workspaceSnippetTitle">腳本常用語快捷鍵</strong><span>逐則新增、修改、刪除或調整順序。</span></div><em id="workspaceScriptSnippetCount">0 / 50</em></header>
+                  <div class="workspace-snippet-add"><input id="workspaceScriptSnippetInput" maxlength="200" placeholder="輸入一則常用語，例如：我們下次影片見！" /><button id="addWorkspaceScriptSnippet" class="secondary-button" type="button">＋ 新增常用語</button></div>
+                  <div id="workspaceScriptSnippetList" class="workspace-snippet-list"></div>
+                  <small id="workspaceScriptSnippetMessage" role="status" aria-live="polite">前 9 則可在腳本編輯器使用 Alt/Option + 1–9；修改清單後請儲存 Workspace 設定。</small>
+                </section>
+                <label><span>視覺風格</span><textarea id="workspaceVisualStyle" maxlength="1000" placeholder="色彩、構圖、素材真實感與字幕風格。"></textarea></label>
+                <label><span>內容原則</span><textarea id="workspaceContentPrinciples" maxlength="6000" placeholder="每行一項，例如：先講使用情境，再說明規格。"></textarea></label>
+                <div class="workspace-ai-profile-actions"><small id="workspaceAIProfileMeta">尚未儲存品牌設定。</small><button class="secondary-button" type="submit">儲存 Workspace 設定</button></div>
+              </form>
+              <div id="workspaceAIProfileMessage" class="message-bar" role="status" aria-live="polite"></div>
+            </section>
+            <section id="promptCenterPanel" class="panel prompt-center-panel hidden" aria-label="Prompt 中心">
+              <div class="prompt-center-header">
+                <div><span class="section-kicker">PLATFORM OWNER · CORE PROMPT CENTER</span><h2>平台核心 Prompt 中心</h2><p>這是所有 Workspace 共用的底層方法與品質標準，只有平台 Owner 能修改。Workspace 使用者只能在上方增加品牌個性，不能覆蓋核心規則。</p></div>
+                <span class="owner-only-badge">平台 Owner 專屬</span>
+              </div>
+              <div id="promptCenterMessage" class="message-bar" role="status" aria-live="polite"></div>
+              <div class="prompt-center-layout">
+                <nav id="promptCatalog" class="prompt-catalog" aria-label="代理 Prompt 清單"></nav>
+                <div id="promptEditor" class="prompt-editor"><div class="prompt-empty">正在讀取 Prompt 設定…</div></div>
+              </div>
+            </section>
+            <section id="accountSecurityPanel" class="panel account-security-panel hidden">
+              <div><span class="section-kicker">ACCOUNT SECURITY</span><h2>變更密碼</h2><p>更新後會保留目前裝置，並撤銷此帳號在其他裝置上的 Session。</p></div>
+              <form id="changePasswordForm" class="workspace-admin-form">
+                <div class="field-row"><label><span>目前密碼</span><input id="currentPassword" type="password" minlength="12" maxlength="128" autocomplete="current-password" required /></label><label><span>新密碼</span><input id="newPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /></label></div>
+                <button class="secondary-button" type="submit">更新密碼</button>
+              </form>
+              <div id="passwordMessage" class="message-bar" role="status" aria-live="polite"></div>
+            </section>
+            <section id="workspaceAdminPanel" class="panel workspace-admin-panel hidden">
+              <div class="workspace-admin-header"><div><span class="section-kicker">WORKSPACE MEMBERSHIP</span><h2>工作區與成員</h2><p>管理目前工作區的成員與角色。建立帳號後，請用安全管道把臨時密碼交給成員。</p></div></div>
+              <div class="workspace-admin-grid">
+                <form id="createWorkspaceForm" class="workspace-admin-form">
+                  <h3>建立新工作區</h3>
+                  <label><span>工作區名稱</span><input id="newWorkspaceName" maxlength="100" required /></label>
+                  <button class="secondary-button" type="submit">建立工作區</button>
+                </form>
+                <form id="addMemberForm" class="workspace-admin-form">
+                  <h3>新增成員</h3>
+                  <div class="field-row"><label><span>顯示名稱</span><input id="memberDisplayName" maxlength="100" required /></label><label><span>電子郵件</span><input id="memberEmail" type="email" maxlength="254" required /></label></div>
+                  <div class="field-row"><label><span>臨時密碼</span><input id="memberPassword" type="password" minlength="12" maxlength="128" required /></label><label><span>角色</span><select id="memberRole"><option value="member">成員</option><option value="admin">管理員</option></select></label></div>
+                  <button class="secondary-button" type="submit">新增成員</button>
+                </form>
+              </div>
+              <div id="membershipMessage" class="message-bar" role="status" aria-live="polite"></div>
+              <div id="memberList" class="member-list"></div>
+            </section>
+          </section>
+
+          <div id="workbenchPage" class="app-page">
+          <section class="page-heading">
+            <div>
+              <div class="eyebrow"><span>✦</span> HUMAN-ON-EXCEPTION 工作流</div>
+              <h1>AI 內容工作台</h1>
+              <p>設定一次需求，讓 AI 團隊自動完成研究、撰寫、驗證與製作規劃。</p>
+            </div>
+            <div class="page-heading-actions">
+              <button id="workbenchReturnButton" class="secondary-button hidden" type="button">← 返回素材中心</button>
+              <button id="historyButton" class="secondary-button">◷ 歷史任務</button>
+              <button id="newWorkflowButton" class="secondary-button">＋ 建立新任務</button>
+            </div>
+          </section>
+
+          <section class="stage-card" aria-label="工作流進度">
+            <div class="stage-line"></div>
+            <div class="stage-item active" data-stage="requirements">
+              <div class="stage-number">1</div>
+              <div><strong>需求設定</strong><span>定義內容方向</span></div>
+            </div>
+            <div class="stage-item" data-stage="ai_creation">
+              <div class="stage-number">2</div>
+              <div><strong>AI 研究與創作</strong><span>自動研究、撰寫與驗證</span></div>
+            </div>
+            <div class="stage-item" data-stage="production_package">
+              <div class="stage-number">3</div>
+              <div><strong>製作素材包</strong><span>分鏡、視覺與發布素材</span></div>
+            </div>
+            <div class="stage-item" data-stage="approval_publish">
+              <div class="stage-number">4</div>
+              <div><strong>核准與發布</strong><span>最終人工把關</span></div>
+            </div>
+          </section>
+
+          <div id="messageBar" class="message-bar" role="status" aria-live="polite"></div>
+
+          <section id="liveProgressPanel" class="live-progress-panel hidden" role="status" aria-live="polite" aria-atomic="false">
+            <div class="live-progress-heading">
+              <div>
+                <span id="liveProgressStage" class="section-kicker">AI 執行進度</span>
+                <strong id="liveProgressAgent">正在準備代理工作</strong>
+              </div>
+              <span id="liveProgressElapsed" class="live-progress-elapsed">00:00</span>
+            </div>
+            <div class="live-progress-track" aria-hidden="true"><span id="liveProgressBar"></span></div>
+            <div class="live-progress-footer">
+              <p id="liveProgressDetail">正在建立安全的執行環境，完成後會自動刷新成果。</p>
+              <span id="liveProgressPercent">0%</span>
+            </div>
+          </section>
+
+          <section id="historyPanel" class="panel history-panel hidden" aria-label="歷史任務">
+            <div class="history-header">
+              <div>
+                <span class="section-kicker">本機永久紀錄</span>
+                <h2>歷史任務</h2>
+                <p>輸入、參考資料、AI 產出、執行紀錄與審核狀態都會保留。</p>
+              </div>
+              <button id="closeHistoryButton" class="icon-button" aria-label="關閉歷史任務">×</button>
+            </div>
+            <div id="historyList" class="history-list"></div>
+          </section>
+
+          <div class="content-grid">
+            <section class="panel form-panel">
+              <div class="panel-header">
+                <div>
+                  <span class="section-kicker">內容需求</span>
+                  <h2>這次想製作什麼內容？</h2>
+                </div>
+                <span class="required-note">* 必填欄位</span>
+              </div>
+
+              <form id="workflowForm">
+                <label class="field field-full">
+                  <span>內容主題 *</span>
+                  <textarea id="topic" required maxlength="500" placeholder="例如：AI 如何協助品牌建立高效率的內容工作流"></textarea>
+                  <small>提供核心問題或貼上你想延伸的內容方向。</small>
+                </label>
+
+                <div class="field-row">
+                  <label class="field">
+                    <span>內容目標 *</span>
+                    <select id="goal" required>
+                      <option value="education">知識教育</option>
+                      <option value="awareness">品牌認知</option>
+                      <option value="conversion">轉換推廣</option>
+                      <option value="community">社群互動</option>
+                      <option value="news_reaction">新聞快評</option>
+                      <option value="unboxing_review">開箱測評</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span>輸出形式 *</span>
+                    <select id="outputType" required>
+                      <option value="short_video">短影音腳本</option>
+                      <option value="long_video">長影音腳本</option>
+                      <option value="short_text_post">短貼文</option>
+                      <option value="thread">串文</option>
+                      <option value="long_text_article">長文文章</option>
+                      <option value="carousel_slides">圖文輪播</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="field-row">
+                  <label class="field"><span>目標受眾</span><input id="targetAudience" maxlength="500" placeholder="例如：品牌行銷與內容團隊" /></label>
+                  <label class="field"><span>品牌名稱</span><input id="brandName" maxlength="200" placeholder="選填" /></label>
+                </div>
+                <div class="field-row">
+                  <label class="field"><span>語言</span><select id="contentLanguage"><option value="繁體中文">繁體中文</option><option value="簡體中文">簡體中文</option><option value="英文">英文</option></select></label>
+                  <label class="field"><span>地區</span><input id="contentRegion" maxlength="100" value="台灣" /></label>
+                </div>
+
+                <div class="field-row length-row">
+                  <label class="field">
+                    <span>目標字數 *</span>
+                    <input id="targetWordCount" type="number" min="200" max="5000" step="50" value="500" required />
+                    <small>AI 會以此作為完整逐字稿的長度目標。</small>
+                  </label>
+                  <div class="duration-card" aria-live="polite">
+                    <span>預估口播時間</span>
+                    <strong id="estimatedDuration">約 2 分 16 秒</strong>
+                    <small>以每分鐘約 220 字估算，實際依語速調整。</small>
+                  </div>
+                </div>
+
+                <fieldset class="field field-full">
+                  <legend>發布平台 *</legend>
+                  <div class="platform-options">
+                    <label class="platform-chip selected"><input type="checkbox" value="youtube" checked /><span class="youtube-dot">▶</span>YouTube</label>
+                    <label class="platform-chip"><input type="checkbox" value="instagram" /><span class="instagram-dot">◎</span>Instagram</label>
+                    <label class="platform-chip"><input type="checkbox" value="threads" /><span>＠</span>Threads</label>
+                  </div>
+                </fieldset>
+
+                <label class="field field-full">
+                  <span>品牌語氣</span>
+                  <input id="brandVoice" value="專業、清楚，但保有自然的對話感" maxlength="500" />
+                </label>
+
+                <label class="field field-full">
+                  <span>限制與注意事項</span>
+                  <textarea id="constraints" class="short-textarea" placeholder="每行一項，例如：不要使用過度誇張的說法"></textarea>
+                </label>
+
+                <details id="referenceSection" class="reference-section">
+                  <summary>
+                    <span><b>＋</b><strong>參考資料與創作方向</strong><small>選填</small></span>
+                    <em>品牌 Brief、逐字稿、網址或文字檔</em>
+                  </summary>
+                  <div class="reference-body">
+                    <div class="reference-priority-note">
+                      <strong>AI 使用優先順序</strong>
+                      <span>品牌 Brief → 產品事實 → 自家內容 → 外部創作者 → 一般資料</span>
+                    </div>
+
+                    <label class="field field-full">
+                      <span>品牌 Brief／品牌規範</span>
+                      <textarea id="brandBrief" placeholder="貼上品牌定位、目標受眾、價值主張、語氣、禁用詞與不可違反事項"></textarea>
+                      <small>這裡的內容會被視為最高優先級，不會被外部創作者範例覆蓋。</small>
+                    </label>
+
+                    <div class="reference-document-upload">
+                      <div class="reference-document-heading">
+                        <div><strong>上傳品牌 Brief／參考文件</strong><small>系統先擷取文字供你確認，勾選後才會交給 AI 使用。</small></div>
+                        <label><span>這批檔案的用途</span><select id="referenceFileKind"><option value="brand_brief">品牌 Brief／規範</option><option value="product_facts">產品與事實資料</option><option value="owned_content">自家過往內容</option><option value="creator_reference">外部創作者參考</option><option value="general">一般補充資料</option></select></label>
+                      </div>
+                      <label class="reference-file-picker" for="referenceFiles">
+                        <span>↑</span>
+                        <strong>選擇文件</strong>
+                        <small>PDF、DOCX、XLSX、PPTX、TXT 等；單檔最多 8 MB</small>
+                      </label>
+                      <input id="referenceFiles" type="file" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.srt,.vtt,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown,text/csv" multiple />
+                      <div id="referenceFileList" class="reference-file-list">尚未選擇檔案</div>
+                      <div id="referenceFileReview" class="reference-file-review" aria-live="polite"></div>
+                      <p class="reference-document-privacy">原始檔只用於本次文字擷取；任務保存的是你確認後的文字，不保存原始文件。</p>
+                    </div>
+
+                    <div class="field-row reference-type-row">
+                      <label class="field">
+                        <span>參考文字類型</span>
+                        <select id="referenceTextType">
+                          <option value="creator_reference">外部創作者參考</option>
+                          <option value="owned_content">自家過往內容</option>
+                          <option value="product_facts">產品與事實資料</option>
+                          <option value="general">一般補充資料</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>希望 AI 參考</span>
+                        <select id="referenceFocus">
+                          <option value="開場、敘事節奏與 CTA 結構">開場、節奏與 CTA</option>
+                          <option value="語氣與句子長度">語氣與句子長度</option>
+                          <option value="內容架構與段落安排">內容架構與段落安排</option>
+                          <option value="資訊與觀點">資訊與觀點</option>
+                          <option value="整體參考">整體參考</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label class="field field-full">
+                      <span>參考逐字稿或文案</span>
+                      <textarea id="referenceText" placeholder="貼上 YouTube 逐字稿、Instagram 文案或自家過往內容"></textarea>
+                    </label>
+
+                    <label class="field field-full">
+                      <span>參考網址</span>
+                      <textarea id="referenceUrls" class="short-textarea" placeholder="每行一個網址，例如 YouTube、Instagram 或文章連結"></textarea>
+                      <small>目前會記錄網址與用途；接上外部擷取服務後，可自動讀取公開內容。</small>
+                    </label>
+
+                    <label class="field field-full reference-boundary-field">
+                      <span>創作邊界</span>
+                      <input id="referenceBoundary" maxlength="1000" placeholder="例如：參考節奏但不要使用原句，也不要模仿個人口頭禪" />
+                      <small>系統預設只提取高層次特徵，不直接複製外部創作者文字。</small>
+                    </label>
+                  </div>
+                </details>
+
+                <div class="automation-note">
+                  <span class="automation-icon">✦</span>
+                  <div><strong>AI 會自動決定執行路線</strong><p>依主題風險與內容需求，動態安排研究、驗證、撰寫及品質檢查代理。</p></div>
+                </div>
+
+                <button id="submitButton" class="primary-button" type="submit"><span>開始 AI 製作</span><b>→</b></button>
+              </form>
+            </section>
+
+            <aside class="side-column">
+              <section class="panel agent-panel">
+                <div class="panel-header compact">
+                  <div><span class="section-kicker">執行團隊</span><h2>AI Agents</h2></div>
+                  <span id="agentCount" class="count-badge">10 個代理</span>
+                </div>
+                <div id="agentList" class="agent-list">
+                  <div class="agent-row" data-agent="reference_analyst"><div class="agent-avatar rose">參</div><div><strong>參考分析代理</strong><span>品牌規範與風格特徵整理</span></div><em class="agent-state">依需求</em></div>
+                  <div class="agent-row" data-agent="research"><div class="agent-avatar blue">研</div><div><strong>研究代理</strong><span>來源蒐集與脈絡整理</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="verification"><div class="agent-avatar amber">驗</div><div><strong>驗證代理</strong><span>事實查核與風險辨識</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="writer"><div class="agent-avatar violet">寫</div><div><strong>撰寫代理</strong><span>產生符合品牌的腳本</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="editorial_critic"><div class="agent-avatar teal">編</div><div><strong>品質主編</strong><span>語氣、口播與剪輯檢查</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="production_planner"><div class="agent-avatar indigo">製</div><div><strong>製作規劃代理</strong><span>分鏡、視覺與發布素材</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="visual_director"><div class="agent-avatar cyan">視</div><div><strong>視覺統籌代理</strong><span>逐字稿、B-roll 與人工修改校準</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="youtube_reference_verifier"><div class="agent-avatar red">影</div><div><strong>影片參考驗證代理</strong><span>Gemini 讀片、時間碼與關聯複核</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="production_quality"><div class="agent-avatar navy">品</div><div><strong>製作包 QA 代理</strong><span>腳本、分鏡、時間軸與平台覆蓋</span></div><em class="agent-state">待命</em></div>
+                  <div class="agent-row" data-agent="publishing_preflight"><div class="agent-avatar orange">發</div><div><strong>發布前 Preflight</strong><span>主張、授權提醒與交付完整性</span></div><em class="agent-state">待命</em></div>
+                </div>
+              </section>
+
+              <section class="panel efficiency-panel">
+                <div class="efficiency-heading"><span>人工介入策略</span><strong>只處理例外</strong></div>
+                <div class="metric-row">
+                  <div><span class="metric-icon green">✓</span><p><strong>2 個人工接觸點</strong><small>需求確認與最終發布</small></p></div>
+                  <div><span class="metric-icon blue">↯</span><p><strong>背景自動執行</strong><small>低風險任務不中斷</small></p></div>
+                </div>
+                <div class="efficiency-footer"><span>預估減少人工操作</span><strong>約 70%</strong></div>
+              </section>
+
+              <section id="decisionPanel" class="panel decision-panel hidden">
+                <div class="decision-icon">!</div>
+                <div><span id="decisionStepBadge" class="decision-step-badge">人工核准</span><span class="section-kicker warning">需要你的決定</span><h3 id="decisionQuestion">內容需要人工確認</h3><p id="decisionSuggestion"></p></div>
+                <label class="decision-feedback"><span>審核意見</span><textarea id="decisionFeedback" maxlength="2000" placeholder="若要修改，請說明要調整的段落、語氣或事實"></textarea></label>
+                <div class="decision-actions">
+                  <button id="rejectButton" class="danger-button">退回任務</button>
+                  <button id="requestChangesButton" class="secondary-button">要求修改</button>
+                  <button id="approveButton" class="primary-button small">核准此內容</button>
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          <section id="executionLogPanel" class="panel execution-log-panel hidden collapsed" aria-label="AI 執行紀錄">
+            <button id="executionLogToggle" class="execution-log-header" type="button" aria-expanded="false">
+              <div>
+                <span class="section-kicker">AI 執行紀錄</span>
+                <h2>每一步的判斷與產出</h2>
+                <p>顯示代理摘要、信心值與風險；不顯示模型內部思考內容。</p>
+              </div>
+              <div class="execution-log-summary">
+                <span id="executionLogCount" class="count-badge">0 筆紀錄</span>
+                <span id="executionLogChevron" class="log-chevron">⌃</span>
+              </div>
+            </button>
+            <div id="executionLogBody" class="execution-log-body">
+              <ol id="executionLogList" class="execution-log-list"></ol>
+            </div>
+          </section>
+
+          <section id="resultPanel" class="panel result-panel hidden" aria-label="成果預覽">
+            <div class="result-header">
+              <div>
+                <span class="section-kicker">審核前成果預覽</span>
+                <h2 id="previewTitle">內容製作包</h2>
+                <p id="previewSummary">請先閱讀完整成果，再決定是否核准。</p>
+              </div>
+              <div class="preview-meta">
+                <span id="wordCountBadge" class="word-count-badge">實際字數 -- / 目標 --</span>
+                <span id="qualityScore" class="score-badge">品質評分 --</span>
+                <span id="resultStatus" class="success-badge">預覽已就緒</span>
+              </div>
+            </div>
+            <div class="preview-tabs" role="tablist" aria-label="成果分類">
+              <button id="tab-script" class="preview-tab active" data-tab="script" role="tab" aria-selected="true" aria-controls="previewContent" tabindex="0">完整腳本</button>
+              <button id="tab-references" class="preview-tab" data-tab="references" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">參考依據</button>
+              <button id="tab-research" class="preview-tab" data-tab="research" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">研究與驗證</button>
+              <button id="tab-storyboard" class="preview-tab" data-tab="storyboard" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">分鏡／版面</button>
+              <button id="tab-visual" class="preview-tab" data-tab="visual" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">視覺與 B-roll</button>
+              <button id="tab-rhythm" class="preview-tab" data-tab="rhythm" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">節奏與素材</button>
+              <button id="tab-distribution" class="preview-tab" data-tab="distribution" role="tab" aria-selected="false" aria-controls="previewContent" tabindex="-1">發布素材</button>
+            </div>
+            <div id="previewContent" class="preview-content"></div>
+            <div class="preview-confirmation">
+              <div><span>✓</span><p><strong>所有審核素材集中在這裡</strong><small>你可以切換上方分頁，確認腳本、來源、分鏡與發布文案。</small></p></div>
+              <button id="scrollToDecisionButton" class="secondary-button">前往核准決策 ↓</button>
+            </div>
+            <div id="artifactFeedback" class="artifact-feedback">
+              <div><strong>這份 AI 內容對你有幫助嗎？</strong><small>回饋只記錄評價與備註，不會把腳本文字送到分析事件。</small></div>
+              <div class="artifact-feedback-actions">
+                <button type="button" data-feedback-rating="helpful">👍 有幫助</button>
+                <button type="button" data-feedback-rating="needs_improvement">👎 需要改善</button>
+              </div>
+              <label><span>補充說明（選填）</span><textarea id="artifactFeedbackNote" maxlength="1000" placeholder="例如：開場很好，但需要更多具體案例"></textarea></label>
+              <p id="artifactFeedbackStatus" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <button id="bugReportButton" class="bug-report-fab hidden" type="button" aria-haspopup="dialog"><span>!</span>回報問題</button>
+    <div id="bugReportModal" class="bug-report-modal hidden" role="dialog" aria-modal="true" aria-labelledby="bugReportTitle">
+      <button class="bug-report-backdrop" type="button" data-close-bug-report aria-label="關閉問題回報"></button>
+      <section class="bug-report-dialog">
+        <header><div><span class="section-kicker">BETA FEEDBACK</span><h2 id="bugReportTitle">回報問題</h2><p>截圖與說明皆為選填；至少提供其中一項，會自動附上目前頁面與裝置資訊。</p></div><button class="icon-button" type="button" data-close-bug-report aria-label="關閉">×</button></header>
+        <form id="bugReportForm">
+          <div class="field-row"><label><span>問題類型</span><select id="bugReportCategory"><option value="functional">功能異常</option><option value="interface">畫面／操作</option><option value="performance">速度過慢</option><option value="ai_output">AI 結果不符合預期</option><option value="other">其他</option></select></label><label><span>影響程度</span><select id="bugReportSeverity"><option value="low">輕微，不影響操作</option><option value="medium" selected>影響操作，但可繼續</option><option value="blocking">無法繼續</option></select></label></div>
+          <label><span>發生什麼事？（選填）</span><textarea id="bugReportDescription" maxlength="3000" placeholder="請簡單描述看到的問題…"></textarea></label>
+          <details><summary>補充重現方式與預期結果（選填）</summary><label><span>重現步驟</span><textarea id="bugReportSteps" maxlength="3000" placeholder="例如：1. 進入素材中心 2. 點擊預覽…"></textarea></label><div class="field-row"><label><span>原本預期</span><textarea id="bugReportExpected" maxlength="2000"></textarea></label><label><span>實際結果</span><textarea id="bugReportActual" maxlength="2000"></textarea></label></div></details>
+          <div class="bug-screenshot-tools">
+            <button id="captureBugScreenshot" class="secondary-button" type="button"><span>▣</span> 擷取目前畫面</button>
+            <label class="bug-screenshot-picker"><span>或上傳截圖（選填，PNG／JPG／WebP，最多 5 MB）</span><input id="bugReportScreenshot" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+          </div>
+          <div id="bugScreenshotPreview" class="bug-screenshot-preview hidden"><img alt="問題截圖預覽" /><button type="button" id="removeBugScreenshot">移除截圖</button></div>
+          <p class="bug-privacy-note">系統只會自動附上頁面名稱、Workspace、任務 ID、瀏覽器、語言與畫面尺寸；不會收集密碼、API Key 或表單文字。請避免在截圖中包含敏感資訊。</p>
+          <p id="bugReportMessage" class="bug-report-message" role="status" aria-live="polite"></p>
+          <footer><button class="secondary-button" type="button" data-close-bug-report>取消</button><button id="submitBugReport" class="primary-button" type="submit">提交回報</button></footer>
+        </form>
+      </section>
+    </div>
+
+    <div id="bugScreenshotEditor" class="bug-screenshot-editor hidden" role="dialog" aria-modal="true" aria-label="截圖標註工具">
+      <div class="bug-editor-stage"><canvas id="bugEditorCanvas" aria-label="截圖標註畫布"></canvas></div>
+      <div class="bug-editor-toolbar" role="toolbar" aria-label="截圖標註功能列">
+        <button type="button" data-bug-editor-tool="crop" class="active" title="框選保留範圍">▣<span>框選</span></button>
+        <button type="button" data-bug-editor-tool="rect" title="矩形標示">□<span>矩形</span></button>
+        <button type="button" data-bug-editor-tool="ellipse" title="圓形標示">○<span>圓形</span></button>
+        <button type="button" data-bug-editor-tool="arrow" title="箭頭">↗<span>箭頭</span></button>
+        <button type="button" data-bug-editor-tool="pen" title="自由畫筆">✎<span>畫筆</span></button>
+        <button type="button" data-bug-editor-tool="mosaic" title="馬賽克遮蔽">▦<span>馬賽克</span></button>
+        <button type="button" data-bug-editor-tool="text" title="加入文字">T<span>文字</span></button>
+        <button id="bugEditorEmojiTool" type="button" data-bug-editor-tool="emoji" title="加入表情" aria-haspopup="true" aria-expanded="false">☺<span>表情</span></button>
+        <label class="bug-editor-color" title="標示顏色"><input id="bugEditorColor" type="color" value="#ff3b30" /><span>顏色</span></label>
+        <label class="bug-editor-size" title="線條粗細"><select id="bugEditorSize"><option value="3">細</option><option value="6" selected>中</option><option value="10">粗</option></select></label>
+        <i></i>
+        <button id="bugEditorUndo" type="button" title="復原">↶<span>復原</span></button>
+        <button id="bugEditorDownload" type="button" title="下載標註截圖">⇩<span>下載</span></button>
+        <button id="bugEditorCancel" class="cancel" type="button" title="取消">×<span>取消</span></button>
+        <button id="bugEditorConfirm" class="confirm" type="button" title="使用這張截圖">✓<span>使用</span></button>
+      </div>
+      <div id="bugEditorEmojiPicker" class="bug-editor-emoji-picker hidden" role="group" aria-label="選擇表情符號">
+        <span>選擇表情後，點擊畫面放置</span>
+        <button type="button" data-bug-editor-emoji="⚠️" title="注意">⚠️</button>
+        <button type="button" data-bug-editor-emoji="❌" title="錯誤">❌</button>
+        <button type="button" data-bug-editor-emoji="✅" title="正確">✅</button>
+        <button type="button" data-bug-editor-emoji="👀" title="查看這裡">👀</button>
+        <button type="button" data-bug-editor-emoji="👉" title="指向這裡">👉</button>
+        <button type="button" data-bug-editor-emoji="😕" title="疑問">😕</button>
+        <button type="button" data-bug-editor-emoji="🐛" title="錯誤回報">🐛</button>
+        <button type="button" data-bug-editor-emoji="💥" title="嚴重問題">💥</button>
+        <button type="button" data-bug-editor-emoji="🔍" title="需要檢查">🔍</button>
+      </div>
+      <p id="bugEditorHint" class="bug-editor-hint">拖曳框選要保留的畫面範圍</p>
+    </div>
+
+    <script src="/app.js?v=20260926-54" defer></script>
+  </body>
+</html>
