@@ -33,6 +33,22 @@ class BootstrapUnavailableError(RuntimeError):
     pass
 
 
+class EmailNotVerifiedError(AuthenticationError):
+    pass
+
+
+class InvalidInviteCodeError(RuntimeError):
+    pass
+
+
+class SignupConflictError(RuntimeError):
+    pass
+
+
+class SignupRateLimitError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class SessionContext:
     session_id: str
@@ -46,8 +62,40 @@ class SessionContext:
     expires_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class SignupResult:
+    """A self-service signup either signs in immediately or awaits email verification."""
+
+    email: str
+    workspace_id: str
+    verification_required: bool
+    raw_token: str = ""
+    context: SessionContext | None = None
+
+
 def normalize_email(value: str) -> str:
     return value.strip().casefold()
+
+
+INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_invite_code() -> str:
+    # 16 characters from a 32-symbol alphabet = 80 bits; unambiguous for manual entry.
+    raw = "".join(secrets.choice(INVITE_CODE_ALPHABET) for _ in range(16))
+    return "-".join(raw[index : index + 4] for index in range(0, 16, 4))
+
+
+def normalize_invite_code(value: str) -> str:
+    return "".join(character for character in value.upper() if character.isalnum())
+
+
+def hash_invite_code(value: str) -> str:
+    return hashlib.sha256(normalize_invite_code(value).encode("utf-8")).hexdigest()
+
+
+def signup_workspace_name(display_name: str) -> str:
+    return f"{display_name} 的工作區"
 
 
 def hash_password(password: str) -> str:
@@ -155,6 +203,18 @@ class SQLiteAuthRepository:
                     identifier_hash TEXT NOT NULL,
                     occurred_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS auth_invite_codes (
+                    id TEXT PRIMARY KEY,
+                    code_hash TEXT NOT NULL UNIQUE,
+                    code_hint TEXT NOT NULL,
+                    label TEXT NOT NULL DEFAULT '',
+                    max_uses INTEGER NOT NULL CHECK(max_uses >= 1),
+                    used_count INTEGER NOT NULL DEFAULT 0,
+                    expires_at TEXT,
+                    revoked_at TEXT,
+                    created_by TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
                 CREATE INDEX IF NOT EXISTS idx_auth_memberships_user
                     ON auth_memberships(user_id, workspace_id);
                 CREATE INDEX IF NOT EXISTS idx_auth_sessions_token
@@ -217,6 +277,128 @@ class SQLiteAuthRepository:
                 (user_id, now.isoformat()),
             )
         return await self._create_session(user_id, "default")
+
+    async def create_invite_code(
+        self,
+        *,
+        created_by: str,
+        label: str = "",
+        max_uses: int = 1,
+        expires_at: datetime | None = None,
+    ) -> dict[str, Any]:
+        code = generate_invite_code()
+        record = {
+            "id": str(uuid4()),
+            "code_hint": code[-4:],
+            "label": " ".join(label.split()),
+            "max_uses": max_uses,
+            "used_count": 0,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            "revoked_at": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO auth_invite_codes
+                    (id, code_hash, code_hint, label, max_uses, expires_at, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record["id"],
+                    hash_invite_code(code),
+                    record["code_hint"],
+                    record["label"],
+                    max_uses,
+                    record["expires_at"],
+                    created_by,
+                    record["created_at"],
+                ),
+            )
+        # The plaintext code is returned exactly once; only its hash is stored.
+        return {**record, "code": code}
+
+    async def list_invite_codes(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id, code_hint, label, max_uses, used_count, expires_at, revoked_at, created_at
+                FROM auth_invite_codes ORDER BY created_at DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    async def revoke_invite_code(self, code_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE auth_invite_codes SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                (datetime.now(timezone.utc).isoformat(), code_id),
+            )
+        if cursor.rowcount != 1:
+            raise InvalidInviteCodeError("invite code not found")
+
+    async def signup(
+        self,
+        *,
+        email: str,
+        display_name: str,
+        password: str,
+        invite_code: str,
+        redirect_to: str = "",
+    ) -> SignupResult:
+        # Local SQLite mode has no mail delivery, so accounts are usable immediately.
+        now = datetime.now(timezone.utc)
+        user_id, workspace_id = str(uuid4()), str(uuid4())
+        password_digest = hash_password(password)
+        normalized_email = normalize_email(email)
+        normalized_name = " ".join(display_name.split())
+        if not normalized_name:
+            raise ValueError("display name is required")
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                """
+                UPDATE auth_invite_codes SET used_count = used_count + 1
+                WHERE code_hash = ? AND revoked_at IS NULL AND used_count < max_uses
+                  AND (expires_at IS NULL OR expires_at > ?)
+                """,
+                (hash_invite_code(invite_code), now.isoformat()),
+            )
+            if cursor.rowcount != 1:
+                connection.rollback()
+                raise InvalidInviteCodeError("invite code is invalid or has expired")
+            if connection.execute(
+                "SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)
+            ).fetchone():
+                connection.rollback()
+                raise SignupConflictError("email is already registered")
+            connection.execute(
+                """
+                INSERT INTO auth_users
+                    (id, email, display_name, password_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, normalized_email, normalized_name, password_digest, now.isoformat(), now.isoformat()),
+            )
+            connection.execute(
+                "INSERT INTO auth_workspaces (id, name, created_at) VALUES (?, ?, ?)",
+                (workspace_id, signup_workspace_name(normalized_name), now.isoformat()),
+            )
+            connection.execute(
+                """
+                INSERT INTO auth_memberships (workspace_id, user_id, role, created_at)
+                VALUES (?, ?, 'owner', ?)
+                """,
+                (workspace_id, user_id, now.isoformat()),
+            )
+        raw_token, context = await self._create_session(user_id, workspace_id)
+        return SignupResult(
+            email=normalized_email,
+            workspace_id=workspace_id,
+            verification_required=False,
+            raw_token=raw_token,
+            context=context,
+        )
 
     async def login(self, email: str, password: str) -> tuple[str, SessionContext]:
         normalized_email = normalize_email(email)

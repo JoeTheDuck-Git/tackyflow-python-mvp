@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -14,9 +15,13 @@ from app.auth.repository import (
     AuthenticationError,
     AuthorizationError,
     BootstrapUnavailableError,
+    EmailNotVerifiedError,
+    InvalidInviteCodeError,
     PasswordResetRateLimitError,
     SQLiteAuthRepository,
     SessionContext,
+    SignupConflictError,
+    SignupRateLimitError,
     normalize_email,
 )
 from app.config import settings
@@ -45,6 +50,16 @@ class BootstrapRequest(CredentialsRequest):
         if not normalized:
             raise ValueError("display name is required")
         return normalized
+
+
+class SignupRequest(BootstrapRequest):
+    invite_code: str = Field(min_length=4, max_length=64)
+
+
+class InviteCodeCreateRequest(BaseModel):
+    label: str = Field(default="", max_length=100)
+    max_uses: int = Field(default=1, ge=1, le=1000)
+    expires_in_days: int | None = Field(default=14, ge=1, le=365)
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -118,8 +133,18 @@ def _set_session_cookie(response: Response, raw_token: str) -> None:
     )
 
 
-def build_auth_router(repository: Any, usage_repository: Any | None = None) -> APIRouter:
+def build_auth_router(
+    repository: Any,
+    usage_repository: Any | None = None,
+    platform_owner_emails: tuple[str, ...] | set[str] = (),
+) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["authentication"])
+    # Platform owners are defined only by server configuration, never by signup.
+    platform_owners = {normalize_email(email) for email in platform_owner_emails if email.strip()}
+
+    def require_platform_owner(context: SessionContext) -> None:
+        if normalize_email(context.email) not in platform_owners:
+            raise HTTPException(status_code=403, detail="platform owner access required")
 
     async def record_auth_event(
         context: SessionContext,
@@ -141,11 +166,61 @@ def build_auth_router(repository: Any, usage_repository: Any | None = None) -> A
 
     @router.get("/auth/status")
     async def auth_status() -> dict[str, Any]:
+        bootstrap_available = await repository.bootstrap_available()
         return {
             "auth_mode": settings.auth_mode,
             "authentication_required": settings.auth_mode == "session",
-            "bootstrap_available": await repository.bootstrap_available(),
+            "bootstrap_available": bootstrap_available,
+            "signup_available": settings.auth_mode == "session" and not bootstrap_available,
         }
+
+    @router.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+    async def signup(payload: SignupRequest, response: Response) -> dict[str, Any]:
+        if settings.auth_mode != "session":
+            raise HTTPException(status_code=409, detail="session authentication is disabled")
+        if await repository.bootstrap_available():
+            raise HTTPException(status_code=409, detail="請先建立第一位管理員。")
+        if payload.email in platform_owners:
+            # Owner addresses are reserved so a signup can never collide with them.
+            raise HTTPException(status_code=409, detail="這個電子郵件無法用於註冊。")
+        try:
+            result = await repository.signup(
+                email=payload.email,
+                display_name=payload.display_name,
+                password=payload.password,
+                invite_code=payload.invite_code,
+                redirect_to=getattr(settings, "signup_verify_redirect_url", ""),
+            )
+        except InvalidInviteCodeError as exc:
+            raise HTTPException(status_code=400, detail="邀請碼無效、已用完或已過期。") from exc
+        except SignupConflictError as exc:
+            raise HTTPException(status_code=409, detail="這個電子郵件已經註冊過，請直接登入或使用忘記密碼。") from exc
+        except SignupRateLimitError as exc:
+            raise HTTPException(status_code=429, detail="驗證信寄送太頻繁，請稍後再試。") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if result.context is None:
+            return {"verification_required": True, "email": result.email}
+        _set_session_cookie(response, result.raw_token)
+        await record_auth_event(result.context, "auth.signup")
+        return {
+            "verification_required": False,
+            **_context_payload(result.context, await repository.list_workspaces(result.context.user_id)),
+        }
+
+    @router.post("/auth/signup/resend", status_code=status.HTTP_202_ACCEPTED)
+    async def resend_verification(payload: PasswordResetRequest) -> dict[str, str]:
+        # Identical response for every address so it cannot be used to probe accounts.
+        resend_method = getattr(repository, "resend_verification", None)
+        if resend_method is not None:
+            try:
+                await resend_method(
+                    payload.email,
+                    redirect_to=getattr(settings, "signup_verify_redirect_url", ""),
+                )
+            except SignupRateLimitError as exc:
+                raise HTTPException(status_code=429, detail="驗證信剛剛已寄出，請先檢查收件匣或稍後再試。") from exc
+        return {"message": "若帳號尚未驗證，系統已重新寄出驗證信。"}
 
     @router.post("/auth/bootstrap", status_code=status.HTTP_201_CREATED)
     async def bootstrap(
@@ -179,6 +254,11 @@ def build_auth_router(repository: Any, usage_repository: Any | None = None) -> A
             raw_token, context = await repository.login(
                 payload.email, payload.password
             )
+        except EmailNotVerifiedError as exc:
+            raise HTTPException(
+                status_code=403,
+                detail={"code": "email_not_verified", "message": "請先到信箱點擊驗證連結，完成後再登入。"},
+            ) from exc
         except (AuthenticationError, AuthorizationError) as exc:
             raise HTTPException(
                 status_code=401, detail="電子郵件或密碼不正確"
@@ -268,6 +348,45 @@ def build_auth_router(repository: Any, usage_repository: Any | None = None) -> A
             raise HTTPException(status_code=400, detail="目前密碼不正確") from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @router.get("/invite-codes")
+    async def list_invite_codes(
+        context: SessionContext = Depends(resolve_session_context),
+    ) -> list[dict[str, Any]]:
+        require_platform_owner(context)
+        return await repository.list_invite_codes()
+
+    @router.post("/invite-codes", status_code=status.HTTP_201_CREATED)
+    async def create_invite_code(
+        payload: InviteCodeCreateRequest,
+        context: SessionContext = Depends(resolve_session_context),
+    ) -> dict[str, Any]:
+        require_platform_owner(context)
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days)
+            if payload.expires_in_days
+            else None
+        )
+        invite = await repository.create_invite_code(
+            created_by=context.user_id,
+            label=payload.label,
+            max_uses=payload.max_uses,
+            expires_at=expires_at,
+        )
+        await record_auth_event(context, "auth.invite_created", {"max_uses": str(payload.max_uses)})
+        return invite
+
+    @router.delete("/invite-codes/{code_id}", status_code=status.HTTP_204_NO_CONTENT)
+    async def revoke_invite_code(
+        code_id: str,
+        context: SessionContext = Depends(resolve_session_context),
+    ) -> Response:
+        require_platform_owner(context)
+        try:
+            await repository.revoke_invite_code(code_id)
+        except InvalidInviteCodeError as exc:
+            raise HTTPException(status_code=404, detail="invite code not found") from exc
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @router.get("/workspaces")

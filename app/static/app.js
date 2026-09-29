@@ -349,6 +349,10 @@ document.querySelector("#forgotPasswordButton").addEventListener("click", () => 
 document.querySelector("#passwordResetRequestForm").addEventListener("submit", submitPasswordResetRequest);
 document.querySelector("#passwordResetConfirmForm").addEventListener("submit", submitPasswordResetConfirm);
 document.querySelectorAll("[data-return-to-login]").forEach((button) => button.addEventListener("click", () => showAuthMode("login")));
+document.querySelector("#showSignupButton").addEventListener("click", () => showAuthMode("signup"));
+document.querySelector("#signupForm").addEventListener("submit", submitSignupForm);
+document.querySelector("#resendVerificationButton").addEventListener("click", resendVerificationEmail);
+document.querySelector("#createInviteCodeForm").addEventListener("submit", createInviteCode);
 document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#workspaceSwitcher").addEventListener("change", (event) => switchWorkspace(event.target.value));
 document.querySelector("#createWorkspaceForm").addEventListener("submit", createWorkspace);
@@ -691,7 +695,12 @@ async function publicAuthApi(url, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
   });
   const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(readableApiDetail(data?.detail ?? data, response.status));
+  if (!response.ok) {
+    const error = new Error(readableApiDetail(data?.detail ?? data, response.status));
+    error.status = response.status;
+    error.code = data?.detail?.code || "";
+    throw error;
+  }
   return data;
 }
 
@@ -707,16 +716,52 @@ function showAuthScreen() {
   document.querySelector("#authSubmitButton").textContent = bootstrap ? "建立管理員並登入" : "登入";
   document.querySelector("#authPassword").autocomplete = bootstrap ? "new-password" : "current-password";
   document.querySelector("#forgotPasswordButton").classList.toggle("hidden", bootstrap);
+  document.querySelector("#showSignupButton").classList.toggle("hidden", !state.authStatus?.signup_available);
+  document.querySelector("#resendVerificationButton").classList.add("hidden");
   restoreRememberedLoginEmail();
+  const verified = consumeSignupVerificationCallback();
   const recovery = consumePasswordRecoveryCallback();
   if (recovery.token) {
     passwordResetAccessToken = recovery.token;
     showAuthMode("confirm-reset");
     return;
   }
+  const inviteCode = consumeInviteLinkParameter();
+  if (inviteCode && state.authStatus?.signup_available) {
+    showAuthMode("signup");
+    document.querySelector("#signupInviteCode").value = inviteCode;
+    document.querySelector("#signupDisplayName").focus();
+    return;
+  }
   showAuthMode("login");
-  if (recovery.error) document.querySelector("#authMessage").textContent = recovery.error;
+  const message = document.querySelector("#authMessage");
+  if (verified) {
+    message.classList.add("success");
+    message.textContent = "Email 驗證完成，請登入開始使用。";
+  }
+  if (recovery.error) message.textContent = recovery.error;
   document.querySelector("#authEmail").focus();
+}
+
+function consumeInviteLinkParameter() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("invite") || "";
+  if (!code) return "";
+  url.searchParams.delete("invite");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+  return code;
+}
+
+function consumeSignupVerificationCallback() {
+  // Supabase redirects back with ?auth=verified plus a #type=signup session fragment.
+  // The session is not used: TackyFlow signs in with its own cookie after login.
+  const url = new URL(window.location.href);
+  const params = new URLSearchParams(url.hash.slice(1));
+  const verified = url.searchParams.get("auth") === "verified" || params.get("type") === "signup";
+  if (!verified || params.get("error")) return false;
+  url.searchParams.delete("auth");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}`);
+  return true;
 }
 
 function consumePasswordRecoveryCallback() {
@@ -735,8 +780,18 @@ function showAuthMode(mode) {
   const bootstrap = Boolean(state.authStatus?.bootstrap_available);
   document.querySelector("#authMessage").classList.remove("success");
   document.querySelector("#authForm").classList.toggle("hidden", mode !== "login");
+  document.querySelector("#signupForm").classList.toggle("hidden", mode !== "signup");
   document.querySelector("#passwordResetRequestForm").classList.toggle("hidden", mode !== "request-reset");
   document.querySelector("#passwordResetConfirmForm").classList.toggle("hidden", mode !== "confirm-reset");
+  if (mode === "signup") {
+    document.querySelector("#authTitle").textContent = "建立 TackyFlow 帳號";
+    document.querySelector("#authDescription").textContent = "輸入邀請碼建立帳號。你會得到自己專屬的工作區，資料只有你和你邀請的成員看得到。";
+    document.querySelector("#signupMessage").textContent = "";
+    document.querySelector("#signupMessage").classList.remove("success");
+    document.querySelector("#signupEmail").value ||= document.querySelector("#authEmail").value.trim();
+    document.querySelector("#signupInviteCode").focus();
+    return;
+  }
   if (mode === "request-reset") {
     document.querySelector("#authTitle").textContent = "重設密碼";
     document.querySelector("#authDescription").textContent = "輸入帳號電子郵件，我們會寄出一次性的安全重設連結。";
@@ -808,6 +863,7 @@ function applyAuthContext(context) {
   switcher.classList.toggle("hidden", context.workspaces.length < 2);
   document.querySelector("#accountSecurityPanel").classList.remove("hidden");
   document.querySelector("#promptCenterPanel").classList.add("hidden");
+  document.querySelector("#inviteCodePanel").classList.add("hidden");
   document.querySelector("#workspaceAIProfilePanel").classList.toggle("hidden", !["owner", "admin"].includes(context.workspace.role));
   document.querySelector("#bugReportButton").classList.remove("hidden");
 }
@@ -864,8 +920,70 @@ async function submitAuthForm(event) {
     await startAuthenticatedApplication();
   } catch (error) {
     message.textContent = error.message || "登入失敗，請再試一次。";
+    document.querySelector("#resendVerificationButton").classList.toggle("hidden", error.code !== "email_not_verified");
   } finally {
     button.disabled = false;
+  }
+}
+
+async function submitSignupForm(event) {
+  event.preventDefault();
+  const button = document.querySelector("#signupSubmitButton");
+  const message = document.querySelector("#signupMessage");
+  const email = document.querySelector("#signupEmail").value.trim();
+  const password = document.querySelector("#signupPassword").value;
+  message.classList.remove("success");
+  if (password !== document.querySelector("#signupPasswordConfirm").value) {
+    message.textContent = "兩次輸入的密碼不一致。";
+    return;
+  }
+  button.disabled = true;
+  message.textContent = "正在建立帳號…";
+  try {
+    const result = await publicAuthApi("/api/v1/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        invite_code: document.querySelector("#signupInviteCode").value.trim(),
+        display_name: document.querySelector("#signupDisplayName").value.trim(),
+        email,
+        password,
+      }),
+    });
+    document.querySelector("#signupForm").reset();
+    if (result.verification_required) {
+      showAuthMode("login");
+      document.querySelector("#authEmail").value = email;
+      const loginMessage = document.querySelector("#authMessage");
+      loginMessage.classList.add("success");
+      loginMessage.textContent = `驗證信已寄到 ${email}。請點擊信中的連結完成驗證，再回來登入。`;
+      document.querySelector("#resendVerificationButton").classList.remove("hidden");
+      return;
+    }
+    applyAuthContext(result);
+    hideAuthScreen();
+    await startAuthenticatedApplication();
+  } catch (error) {
+    message.textContent = error.message || "無法建立帳號，請再試一次。";
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function resendVerificationEmail() {
+  const message = document.querySelector("#authMessage");
+  const email = document.querySelector("#authEmail").value.trim();
+  if (!email) {
+    message.classList.remove("success");
+    message.textContent = "請先輸入註冊時使用的電子郵件。";
+    return;
+  }
+  try {
+    const result = await publicAuthApi("/api/v1/auth/signup/resend", { method: "POST", body: JSON.stringify({ email }) });
+    message.classList.add("success");
+    message.textContent = result.message || "已重新寄出驗證信。";
+  } catch (error) {
+    message.classList.remove("success");
+    message.textContent = error.message || "目前無法寄送驗證信，請稍後再試。";
   }
 }
 
@@ -955,7 +1073,7 @@ async function switchWorkspace(workspaceId) {
     await Promise.allSettled([loadHistory(), loadUsage(), loadWorkspaceAIProfile()]);
     if (state.currentPage === "settings") {
       renderSettings();
-      await Promise.allSettled([loadWorkspaceMembers(), loadWorkspaceAIProfile(), loadPromptCenter(), loadBetaUsage(), loadBugReports()]);
+      await Promise.allSettled([loadWorkspaceMembers(), loadWorkspaceAIProfile(), loadPromptCenter(), loadInviteCodes(), loadBetaUsage(), loadBugReports()]);
     }
     showMessage(`已切換到「${context.workspace.name}」。`, false);
   } catch (error) {
@@ -1235,6 +1353,7 @@ function showPage(pageName, options = {}) {
     loadWorkspaceMembers();
     loadWorkspaceAIProfile();
     loadPromptCenter();
+    loadInviteCodes();
     loadBetaUsage();
     loadBugReports();
   }
@@ -1715,6 +1834,90 @@ function showPromptCenterMessage(message, isError = false) {
   bar.classList.add("show");
 }
 
+async function loadInviteCodes() {
+  const panel = document.querySelector("#inviteCodePanel");
+  try {
+    state.inviteCodes = await api("/api/v1/invite-codes");
+    panel.classList.remove("hidden");
+    renderInviteCodes();
+  } catch (error) {
+    // The server only answers platform owners; everyone else never sees the panel.
+    panel.classList.add("hidden");
+    state.inviteCodes = [];
+    if (error.status !== 403) console.warn("invite codes unavailable", error);
+  }
+}
+
+function inviteCodeStatus(item) {
+  if (item.revoked_at) return "已停用";
+  if (item.expires_at && new Date(item.expires_at) <= new Date()) return "已過期";
+  if (item.used_count >= item.max_uses) return "已用完";
+  return "可使用";
+}
+
+function renderInviteCodes() {
+  const list = document.querySelector("#inviteCodeList");
+  const codes = state.inviteCodes || [];
+  if (!codes.length) {
+    list.innerHTML = '<div class="prompt-empty">尚未建立邀請碼。</div>';
+    return;
+  }
+  list.innerHTML = codes.map((item) => {
+    const status = inviteCodeStatus(item);
+    const expires = item.expires_at ? `${formatDateTime(item.expires_at)} 到期` : "不過期";
+    return `<article class="member-row"><div><strong>${escapeHtml(item.label || "未命名邀請碼")}</strong><small>…${escapeHtml(item.code_hint)} · 已使用 ${Number(item.used_count)} / ${Number(item.max_uses)} · ${escapeHtml(expires)}</small></div><span>${escapeHtml(status)}</span>${status === "可使用" ? `<button class="text-button" type="button" data-revoke-invite="${escapeHtml(item.id)}">停用</button>` : ""}</article>`;
+  }).join("");
+  list.querySelectorAll("[data-revoke-invite]").forEach((button) => button.addEventListener("click", () => revokeInviteCode(button.dataset.revokeInvite)));
+}
+
+function showInviteCodeMessage(message, isError = false) {
+  const bar = document.querySelector("#inviteCodeMessage");
+  bar.textContent = message;
+  bar.classList.toggle("error", Boolean(isError));
+  bar.classList.add("show");
+}
+
+async function createInviteCode(event) {
+  event.preventDefault();
+  const expires = document.querySelector("#inviteExpiresInDays").value;
+  try {
+    const invite = await api("/api/v1/invite-codes", {
+      method: "POST",
+      body: JSON.stringify({
+        label: document.querySelector("#inviteLabel").value.trim(),
+        max_uses: Number(document.querySelector("#inviteMaxUses").value || 1),
+        expires_in_days: expires ? Number(expires) : null,
+      }),
+    });
+    const link = `${window.location.origin}/?invite=${encodeURIComponent(invite.code)}`;
+    const reveal = document.querySelector("#inviteCodeReveal");
+    reveal.innerHTML = `<strong>新的邀請碼（只會顯示這一次）</strong><code>${escapeHtml(invite.code)}</code><small>${escapeHtml(link)}</small><div><button class="secondary-button" type="button" data-copy-invite="code">複製邀請碼</button><button class="secondary-button" type="button" data-copy-invite="link">複製邀請連結</button></div>`;
+    reveal.classList.remove("hidden");
+    reveal.querySelectorAll("[data-copy-invite]").forEach((button) => button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copyInvite === "link" ? link : invite.code);
+        showInviteCodeMessage("已複製。");
+      } catch {
+        showInviteCodeMessage("無法自動複製，請手動選取上方文字。", true);
+      }
+    }));
+    document.querySelector("#createInviteCodeForm").reset();
+    await loadInviteCodes();
+  } catch (error) {
+    showInviteCodeMessage(error.message || "無法建立邀請碼。", true);
+  }
+}
+
+async function revokeInviteCode(codeId) {
+  try {
+    await api(`/api/v1/invite-codes/${encodeURIComponent(codeId)}`, { method: "DELETE" });
+    showInviteCodeMessage("邀請碼已停用。");
+    await loadInviteCodes();
+  } catch (error) {
+    showInviteCodeMessage(error.message || "無法停用邀請碼。", true);
+  }
+}
+
 async function loadUsage() {
   try {
     state.usage = await api("/api/v1/usage");
@@ -2164,6 +2367,8 @@ async function saveBugReport(card) {
 function betaEventLabel(name) {
   return ({
     "auth.bootstrap": "建立平台帳號",
+    "auth.signup": "邀請碼註冊",
+    "auth.invite_created": "建立邀請碼",
     "auth.login": "登入",
     "auth.logout": "登出",
     "workspace.created": "建立 Workspace",
@@ -5329,6 +5534,7 @@ function validationFieldLabel(location) {
     reference_materials: "參考資料", reference_boundary: "參考使用邊界", workspace_id: "工作空間",
     source_opportunity_id: "來源題目", source_generation_id: "來源探索紀錄", status: "狀態",
     feedback_note: "回饋備註", adopted_workflow_id: "採用任務",
+    invite_code: "邀請碼", display_name: "顯示名稱", email: "電子郵件", password: "密碼",
   })[key] || key || "輸入內容";
 }
 

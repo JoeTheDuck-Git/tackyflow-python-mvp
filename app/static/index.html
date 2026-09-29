@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=20260926-48" />
+    <link rel="stylesheet" href="/styles.css?v=20260929-2" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen hidden" aria-label="登入">
@@ -25,7 +25,19 @@
             <span><strong>記住登入資料</strong><small>本機只記住電子郵件；密碼由瀏覽器或系統密碼管理器安全保存。</small></span>
           </label>
           <div id="authMessage" class="auth-message" role="status" aria-live="polite"></div>
+          <button id="resendVerificationButton" class="auth-link hidden" type="button">重新寄送驗證信</button>
           <button id="authSubmitButton" class="primary-button" type="submit">登入</button>
+          <button id="showSignupButton" class="auth-link hidden" type="button">還沒有帳號？使用邀請碼註冊</button>
+        </form>
+        <form id="signupForm" class="hidden" autocomplete="on">
+          <label class="field"><span>邀請碼</span><input id="signupInviteCode" maxlength="64" autocomplete="off" placeholder="XXXX-XXXX-XXXX-XXXX" required /></label>
+          <label class="field"><span>顯示名稱</span><input id="signupDisplayName" maxlength="100" autocomplete="name" required /></label>
+          <label class="field"><span>電子郵件</span><input id="signupEmail" type="email" maxlength="254" autocomplete="email" required /></label>
+          <label class="field"><span>密碼</span><input id="signupPassword" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /><small>至少 12 個字元。</small></label>
+          <label class="field"><span>再次輸入密碼</span><input id="signupPasswordConfirm" type="password" minlength="12" maxlength="128" autocomplete="new-password" required /></label>
+          <div id="signupMessage" class="auth-message" role="status" aria-live="polite"></div>
+          <button id="signupSubmitButton" class="primary-button" type="submit">建立帳號</button>
+          <button class="auth-link" data-return-to-login type="button">已經有帳號？返回登入</button>
         </form>
         <form id="passwordResetRequestForm" class="hidden" autocomplete="on">
           <label class="field"><span>電子郵件</span><input id="passwordResetEmail" type="email" maxlength="254" autocomplete="email" required /></label>
@@ -346,6 +358,23 @@
                 <nav id="promptCatalog" class="prompt-catalog" aria-label="代理 Prompt 清單"></nav>
                 <div id="promptEditor" class="prompt-editor"><div class="prompt-empty">正在讀取 Prompt 設定…</div></div>
               </div>
+            </section>
+            <section id="inviteCodePanel" class="panel workspace-admin-panel hidden" aria-label="註冊邀請碼">
+              <div class="prompt-center-header">
+                <div><span class="section-kicker">PLATFORM OWNER · SIGNUP INVITES</span><h2>註冊邀請碼</h2><p>對外開放註冊時，對方必須持有邀請碼。每位新用戶會得到自己獨立的工作區，看不到你的工作區與平台管理功能。邀請碼只在建立時顯示一次，請立即複製。</p></div>
+                <span class="owner-only-badge">平台 Owner 專屬</span>
+              </div>
+              <form id="createInviteCodeForm" class="workspace-admin-form">
+                <div class="field-row">
+                  <label><span>備註（給誰）</span><input id="inviteLabel" maxlength="100" placeholder="例如：Beta 測試者 A" /></label>
+                  <label><span>可使用次數</span><input id="inviteMaxUses" type="number" min="1" max="1000" value="1" required /></label>
+                  <label><span>有效天數</span><select id="inviteExpiresInDays"><option value="7">7 天</option><option value="14" selected>14 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="">不過期</option></select></label>
+                </div>
+                <button class="secondary-button" type="submit">產生邀請碼</button>
+              </form>
+              <div id="inviteCodeReveal" class="invite-code-reveal hidden"></div>
+              <div id="inviteCodeMessage" class="message-bar" role="status" aria-live="polite"></div>
+              <div id="inviteCodeList" class="member-list"></div>
             </section>
             <section id="accountSecurityPanel" class="panel account-security-panel hidden">
               <div><span class="section-kicker">ACCOUNT SECURITY</span><h2>變更密碼</h2><p>更新後會保留目前裝置，並撤銷此帳號在其他裝置上的 Session。</p></div>
@@ -760,6 +789,6 @@
       <p id="bugEditorHint" class="bug-editor-hint">拖曳框選要保留的畫面範圍</p>
     </div>
 
-    <script src="/app.js?v=20260926-54" defer></script>
+    <script src="/app.js?v=20260929-1" defer></script>
   </body>
 </html>

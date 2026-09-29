@@ -16,11 +16,27 @@ from app.auth.repository import (
     AuthenticationError,
     AuthorizationError,
     BootstrapUnavailableError,
+    EmailNotVerifiedError,
+    InvalidInviteCodeError,
     PasswordResetRateLimitError,
     ROLE_ORDER,
     SessionContext,
+    SignupConflictError,
+    SignupRateLimitError,
+    SignupResult,
+    generate_invite_code,
+    hash_invite_code,
     normalize_email,
+    signup_workspace_name,
 )
+
+
+def _supabase_error_code(response: httpx.Response) -> str:
+    try:
+        payload = response.json() or {}
+    except ValueError:
+        payload = {}
+    return str(payload.get("error_code") or payload.get("code") or payload.get("error") or "")
 
 
 class PostgresSupabaseAuthRepository:
@@ -89,6 +105,20 @@ class PostgresSupabaseAuthRepository:
                     expires_at TIMESTAMPTZ NOT NULL
                 )
             """)
+            connection.execute("""
+                CREATE TABLE IF NOT EXISTS py_auth_invite_codes (
+                    id TEXT PRIMARY KEY,
+                    code_hash TEXT NOT NULL UNIQUE,
+                    code_hint TEXT NOT NULL,
+                    label TEXT NOT NULL DEFAULT '',
+                    max_uses INTEGER NOT NULL CHECK(max_uses >= 1),
+                    used_count INTEGER NOT NULL DEFAULT 0,
+                    expires_at TIMESTAMPTZ,
+                    revoked_at TIMESTAMPTZ,
+                    created_by TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL
+                )
+            """)
             connection.execute("CREATE INDEX IF NOT EXISTS idx_py_auth_memberships_user ON py_auth_memberships(user_id, workspace_id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_py_auth_sessions_token ON py_auth_sessions(token_hash)")
 
@@ -103,6 +133,10 @@ class PostgresSupabaseAuthRepository:
                 json={"email": normalize_email(email), "password": password},
             )
         if response.status_code >= 400:
+            # Supabase only reports this after the password matched, so it does not
+            # reveal whether an address is registered.
+            if _supabase_error_code(response) == "email_not_confirmed":
+                raise EmailNotVerifiedError("email address has not been verified")
             raise AuthenticationError("invalid email or password")
         return response.json()
 
@@ -138,6 +172,114 @@ class PostgresSupabaseAuthRepository:
             connection.execute("INSERT INTO py_auth_workspaces (id,name,created_at) VALUES ('default','預設工作區',%s) ON CONFLICT (id) DO NOTHING", (now,))
             connection.execute("INSERT INTO py_auth_memberships (workspace_id,user_id,role,created_at) VALUES ('default',%s,'owner',%s)", (user_id, now))
         return await self._create_session(user_id, "default")
+
+    async def create_invite_code(self, *, created_by: str, label: str = "", max_uses: int = 1, expires_at: datetime | None = None) -> dict[str, Any]:
+        code, now = generate_invite_code(), datetime.now(timezone.utc)
+        record = {"id": str(uuid4()), "code_hint": code[-4:], "label": " ".join(label.split()), "max_uses": max_uses, "used_count": 0, "expires_at": expires_at, "revoked_at": None, "created_at": now}
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO py_auth_invite_codes (id,code_hash,code_hint,label,max_uses,expires_at,created_by,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (record["id"], hash_invite_code(code), record["code_hint"], record["label"], max_uses, expires_at, created_by, now),
+            )
+        # The plaintext code is returned exactly once; only its hash is stored.
+        return {**record, "code": code}
+
+    async def list_invite_codes(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            return list(connection.execute("SELECT id,code_hint,label,max_uses,used_count,expires_at,revoked_at,created_at FROM py_auth_invite_codes ORDER BY created_at DESC").fetchall())
+
+    async def revoke_invite_code(self, code_id: str) -> None:
+        with self._connect() as connection:
+            cursor = connection.execute("UPDATE py_auth_invite_codes SET revoked_at=%s WHERE id=%s AND revoked_at IS NULL", (datetime.now(timezone.utc), code_id))
+        if cursor.rowcount != 1:
+            raise InvalidInviteCodeError("invite code not found")
+
+    def _redeem_invite_code(self, invite_code: str) -> str:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                UPDATE py_auth_invite_codes SET used_count=used_count+1
+                WHERE code_hash=%s AND revoked_at IS NULL AND used_count<max_uses
+                  AND (expires_at IS NULL OR expires_at>%s)
+                RETURNING id
+                """,
+                (hash_invite_code(invite_code), datetime.now(timezone.utc)),
+            ).fetchone()
+        if row is None:
+            raise InvalidInviteCodeError("invite code is invalid or has expired")
+        return row["id"]
+
+    def _release_invite_code(self, code_id: str) -> None:
+        with self._connect() as connection:
+            connection.execute("UPDATE py_auth_invite_codes SET used_count=used_count-1 WHERE id=%s AND used_count>0", (code_id,))
+
+    async def _supabase_signup(self, email: str, password: str, display_name: str, redirect_to: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
+            response = await client.post(
+                f"{self.supabase_url}/auth/v1/signup",
+                params={"redirect_to": redirect_to} if redirect_to else None,
+                headers={"apikey": self.anon_key, "Authorization": f"Bearer {self.anon_key}"},
+                json={"email": normalize_email(email), "password": password, "data": {"display_name": display_name}},
+            )
+        error_code = _supabase_error_code(response) if response.status_code >= 400 else ""
+        if response.status_code == 429 or "rate_limit" in error_code:
+            raise SignupRateLimitError("verification email rate limit reached")
+        if error_code in {"user_already_exists", "email_exists"}:
+            raise SignupConflictError("email is already registered")
+        if response.status_code >= 400:
+            raise ValueError("Supabase Auth 無法建立帳號，請確認電子郵件與密碼格式")
+        payload = response.json() or {}
+        user = payload.get("user") or payload
+        # With email confirmation on, Supabase answers an existing address with an
+        # obfuscated user that has no identities instead of an error.
+        if not user.get("id") or user.get("identities") == []:
+            raise SignupConflictError("email is already registered")
+        return user
+
+    async def _admin_delete_user(self, user_id: str) -> None:
+        try:
+            async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
+                await client.delete(f"{self.supabase_url}/auth/v1/admin/users/{user_id}", headers=self._admin_headers())
+        except httpx.HTTPError:
+            pass
+
+    async def signup(self, *, email: str, display_name: str, password: str, invite_code: str, redirect_to: str = "") -> SignupResult:
+        normalized_email, normalized_name = normalize_email(email), " ".join(display_name.split())
+        if not normalized_name:
+            raise ValueError("display name is required")
+        code_id = self._redeem_invite_code(invite_code)
+        try:
+            user = await self._supabase_signup(normalized_email, password, normalized_name, redirect_to)
+        except BaseException:
+            self._release_invite_code(code_id)
+            raise
+        user_id, workspace_id, now = str(user["id"]), str(uuid4()), datetime.now(timezone.utc)
+        try:
+            # One pooled connection block commits all three rows together or none.
+            with self._connect() as connection:
+                connection.execute("INSERT INTO py_auth_profiles (id,email,display_name,created_at,updated_at) VALUES (%s,%s,%s,%s,%s)", (user_id, normalized_email, normalized_name, now, now))
+                connection.execute("INSERT INTO py_auth_workspaces (id,name,created_at) VALUES (%s,%s,%s)", (workspace_id, signup_workspace_name(normalized_name), now))
+                connection.execute("INSERT INTO py_auth_memberships (workspace_id,user_id,role,created_at) VALUES (%s,%s,'owner',%s)", (workspace_id, user_id, now))
+        except BaseException as exc:
+            # Keep Supabase Auth and the workspace tables consistent.
+            await self._admin_delete_user(user_id)
+            self._release_invite_code(code_id)
+            if isinstance(exc, UniqueViolation):
+                raise SignupConflictError("email is already registered") from exc
+            raise
+        # Login stays blocked by Supabase until the verification link is clicked.
+        return SignupResult(email=normalized_email, workspace_id=workspace_id, verification_required=True)
+
+    async def resend_verification(self, email: str, *, redirect_to: str = "") -> None:
+        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
+            response = await client.post(
+                f"{self.supabase_url}/auth/v1/resend",
+                params={"redirect_to": redirect_to} if redirect_to else None,
+                headers={"apikey": self.anon_key, "Authorization": f"Bearer {self.anon_key}"},
+                json={"type": "signup", "email": normalize_email(email)},
+            )
+        if response.status_code == 429 or "rate_limit" in _supabase_error_code(response):
+            raise SignupRateLimitError("verification email rate limit reached")
 
     async def login(self, email: str, password: str) -> tuple[str, SessionContext]:
         auth = await self._supabase_login(email, password)

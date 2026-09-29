@@ -50,6 +50,10 @@ class Settings:
         "PASSWORD_RESET_REDIRECT_URL",
         "http://127.0.0.1:8000/?auth=recovery" if os.getenv("APP_ENV", "development") != "production" else "",
     )
+    signup_verify_redirect_url: str = os.getenv(
+        "SIGNUP_VERIFY_REDIRECT_URL",
+        "http://127.0.0.1:8000/?auth=verified" if os.getenv("APP_ENV", "development") != "production" else "",
+    )
     content_provider: str = os.getenv("CONTENT_PROVIDER", "local_rule")
     workflow_agent_provider: str = os.getenv("WORKFLOW_AGENT_PROVIDER", "local_rule")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-5.6-sol")

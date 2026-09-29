@@ -148,7 +148,7 @@ async def apply_ai_schema() -> None:
         from app.db.migrations import apply_migrations
 
         apply_migrations(settings.database_url)
-app.include_router(build_auth_router(auth_repository, usage_repository))
+app.include_router(build_auth_router(auth_repository, usage_repository, settings.platform_owner_emails))
 app.include_router(build_workspace_ai_router(workspace_ai_profile_repository))
 app.include_router(build_prompt_router(
     prompt_repository,
