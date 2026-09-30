@@ -55,3 +55,50 @@ def lock_schema_setup(connection) -> None:
     makes them run one after another; it is released at commit.
     """
     connection.execute("SELECT pg_advisory_xact_lock(%s)", (SCHEMA_SETUP_LOCK_KEY,))
+
+
+def _deployment_version() -> str:
+    return (
+        os.getenv("VERCEL_GIT_COMMIT_SHA")
+        or os.getenv("VERCEL_DEPLOYMENT_ID")
+        or os.getenv("VERCEL_URL")
+        or ""
+    )
+
+
+def begin_schema_setup(connection, key: str) -> bool:
+    """Return True when this instance should run ``key``'s startup DDL.
+
+    The first instance of a deployment runs the DDL under the advisory lock and
+    records the deployment in py_schema_setup (in the same transaction, so a
+    failed DDL leaves no record). Every later cold start of that deployment sees
+    the record with one cheap SELECT and skips DDL entirely, instead of queueing
+    behind the lock. Without a deployment id (local runs) DDL always runs.
+    """
+    version = _deployment_version()
+    if version and _schema_recorded(connection, key, version):
+        return False
+    lock_schema_setup(connection)
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS py_schema_setup (
+            key TEXT PRIMARY KEY, version TEXT NOT NULL,
+            applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"""
+    )
+    if not version:
+        return True
+    if _schema_recorded(connection, key, version):
+        return False
+    connection.execute(
+        """INSERT INTO py_schema_setup (key, version) VALUES (%s, %s)
+           ON CONFLICT (key) DO UPDATE SET version = EXCLUDED.version, applied_at = now()""",
+        (key, version),
+    )
+    return True
+
+
+def _schema_recorded(connection, key: str, version: str) -> bool:
+    exists = connection.execute("SELECT to_regclass('py_schema_setup') IS NOT NULL AS ok").fetchone()
+    if not (exists["ok"] if isinstance(exists, dict) else exists[0]):
+        return False
+    row = connection.execute("SELECT version FROM py_schema_setup WHERE key = %s", (key,)).fetchone()
+    return row is not None and (row["version"] if isinstance(row, dict) else row[0]) == version

@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import psycopg
 from psycopg.rows import dict_row
-from app.db.postgres import get_pool, lock_schema_setup
+from app.db.postgres import begin_schema_setup, get_pool
 from app.prompts.templates import DETAILED_PROMPT_TEMPLATES
 
 
@@ -172,7 +172,8 @@ class PostgresPromptRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url=database_url
         with self._connect() as connection:
-            lock_schema_setup(connection)
+            if not begin_schema_setup(connection, "prompts"):
+                return
             connection.execute("""CREATE TABLE IF NOT EXISTS py_prompt_versions (
                 id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, prompt_key TEXT NOT NULL,
                 version INTEGER NOT NULL, instructions TEXT NOT NULL, change_note TEXT NOT NULL DEFAULT '',

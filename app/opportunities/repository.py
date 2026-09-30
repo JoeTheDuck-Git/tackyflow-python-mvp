@@ -8,7 +8,7 @@ from typing import Any, Protocol
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from app.db.postgres import get_pool, lock_schema_setup
+from app.db.postgres import begin_schema_setup, get_pool
 
 from app.domain.models import (
     OpportunityGenerationEvent,
@@ -155,7 +155,8 @@ class PostgresOpportunityRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
         with self._connect() as connection:
-            lock_schema_setup(connection)
+            if not begin_schema_setup(connection, "opportunities"):
+                return
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS py_opportunity_generations (
                     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL,

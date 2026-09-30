@@ -8,7 +8,7 @@ from typing import Protocol
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from app.db.postgres import get_pool, lock_schema_setup
+from app.db.postgres import begin_schema_setup, get_pool
 
 from app.domain.models import WorkflowRun
 
@@ -261,7 +261,8 @@ class PostgresWorkflowRepository:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            lock_schema_setup(connection)
+            if not begin_schema_setup(connection, "workflow"):
+                return
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS py_workflows (
