@@ -10,7 +10,7 @@ import httpx
 import psycopg
 from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
-from app.db.postgres import get_pool
+from app.db.postgres import get_pool, lock_schema_setup
 
 from app.auth.repository import (
     AuthenticationError,
@@ -67,6 +67,7 @@ class PostgresSupabaseAuthRepository:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
+            lock_schema_setup(connection)
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS py_auth_profiles (
                     id TEXT PRIMARY KEY,

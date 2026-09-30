@@ -1549,3 +1549,14 @@ body { font-size: 16px; line-height: 1.55; }
 .invite-code-reveal code { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; color: #1e3a8a; user-select: all; }
 .invite-code-reveal small { color: #475569; word-break: break-all; user-select: all; }
 .invite-code-reveal div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.task-complete-modal { position: fixed; z-index: 130; inset: 0; display: grid; place-items: center; padding: 22px; }
+.task-complete-modal.hidden { display: none; }
+.task-complete-dialog { position: relative; display: grid; justify-items: center; gap: 8px; width: min(440px, 100%); padding: 30px 28px 24px; border-radius: 16px; background: white; box-shadow: 0 24px 70px rgba(15,23,42,.3); text-align: center; animation: task-complete-in .22s ease-out; }
+.task-complete-dialog h2 { margin: 2px 0 0; color: #172033; font-size: 22px; }
+.task-complete-dialog p { margin: 0; color: #475569; line-height: 1.7; }
+.task-complete-icon { display: grid; width: 56px; height: 56px; place-items: center; border-radius: 50%; color: white; background: #16a34a; font-size: 28px; font-weight: 800; box-shadow: 0 10px 24px rgba(22,163,74,.3); }
+.task-complete-dialog.needs-review .task-complete-icon { background: #2563eb; box-shadow: 0 10px 24px rgba(37,99,235,.3); }
+.task-complete-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
+@keyframes task-complete-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .task-complete-dialog { animation: none; } }

@@ -8,7 +8,7 @@ from typing import Any
 
 import psycopg
 
-from app.db.postgres import get_pool
+from app.db.postgres import get_pool, lock_schema_setup
 
 
 EMPTY_WORKSPACE_AI_PROFILE: dict[str, Any] = {
@@ -94,6 +94,7 @@ class PostgresWorkspaceAIProfileRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
         with self._connect() as connection:
+            lock_schema_setup(connection)
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS py_workspace_ai_profiles (
                     workspace_id TEXT PRIMARY KEY,

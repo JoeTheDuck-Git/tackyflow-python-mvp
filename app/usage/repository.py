@@ -10,7 +10,7 @@ from uuid import uuid4
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
-from app.db.postgres import get_pool
+from app.db.postgres import get_pool, lock_schema_setup
 
 
 class GenerationQuotaExceededError(RuntimeError):
@@ -568,6 +568,7 @@ class PostgresUsageRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
         with self._connect() as connection:
+            lock_schema_setup(connection)
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS py_usage_events (
                     id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, actor_id TEXT NOT NULL,

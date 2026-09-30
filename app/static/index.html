@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=20260929-2" />
+    <link rel="stylesheet" href="/styles.css?v=20261001-1" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen hidden" aria-label="登入">
@@ -348,17 +348,6 @@
               </form>
               <div id="workspaceAIProfileMessage" class="message-bar" role="status" aria-live="polite"></div>
             </section>
-            <section id="promptCenterPanel" class="panel prompt-center-panel hidden" aria-label="Prompt 中心">
-              <div class="prompt-center-header">
-                <div><span class="section-kicker">PLATFORM OWNER · CORE PROMPT CENTER</span><h2>平台核心 Prompt 中心</h2><p>這是所有 Workspace 共用的底層方法與品質標準，只有平台 Owner 能修改。Workspace 使用者只能在上方增加品牌個性，不能覆蓋核心規則。</p></div>
-                <span class="owner-only-badge">平台 Owner 專屬</span>
-              </div>
-              <div id="promptCenterMessage" class="message-bar" role="status" aria-live="polite"></div>
-              <div class="prompt-center-layout">
-                <nav id="promptCatalog" class="prompt-catalog" aria-label="代理 Prompt 清單"></nav>
-                <div id="promptEditor" class="prompt-editor"><div class="prompt-empty">正在讀取 Prompt 設定…</div></div>
-              </div>
-            </section>
             <section id="inviteCodePanel" class="panel workspace-admin-panel hidden" aria-label="註冊邀請碼">
               <div class="prompt-center-header">
                 <div><span class="section-kicker">PLATFORM OWNER · SIGNUP INVITES</span><h2>註冊邀請碼</h2><p>對外開放註冊時，對方必須持有邀請碼。每位新用戶會得到自己獨立的工作區，看不到你的工作區與平台管理功能。邀請碼只在建立時顯示一次，請立即複製。</p></div>
@@ -375,6 +364,17 @@
               <div id="inviteCodeReveal" class="invite-code-reveal hidden"></div>
               <div id="inviteCodeMessage" class="message-bar" role="status" aria-live="polite"></div>
               <div id="inviteCodeList" class="member-list"></div>
+            </section>
+            <section id="promptCenterPanel" class="panel prompt-center-panel hidden" aria-label="Prompt 中心">
+              <div class="prompt-center-header">
+                <div><span class="section-kicker">PLATFORM OWNER · CORE PROMPT CENTER</span><h2>平台核心 Prompt 中心</h2><p>這是所有 Workspace 共用的底層方法與品質標準，只有平台 Owner 能修改。Workspace 使用者只能在上方增加品牌個性，不能覆蓋核心規則。</p></div>
+                <span class="owner-only-badge">平台 Owner 專屬</span>
+              </div>
+              <div id="promptCenterMessage" class="message-bar" role="status" aria-live="polite"></div>
+              <div class="prompt-center-layout">
+                <nav id="promptCatalog" class="prompt-catalog" aria-label="代理 Prompt 清單"></nav>
+                <div id="promptEditor" class="prompt-editor"><div class="prompt-empty">正在讀取 Prompt 設定…</div></div>
+              </div>
             </section>
             <section id="accountSecurityPanel" class="panel account-security-panel hidden">
               <div><span class="section-kicker">ACCOUNT SECURITY</span><h2>變更密碼</h2><p>更新後會保留目前裝置，並撤銷此帳號在其他裝置上的 Session。</p></div>
@@ -735,6 +735,19 @@
     </div>
 
     <button id="bugReportButton" class="bug-report-fab hidden" type="button" aria-haspopup="dialog"><span>!</span>回報問題</button>
+    <div id="taskCompleteModal" class="task-complete-modal hidden" role="dialog" aria-modal="true" aria-labelledby="taskCompleteTitle">
+      <button class="bug-report-backdrop" type="button" data-close-task-complete aria-label="關閉"></button>
+      <div class="task-complete-dialog">
+        <div class="task-complete-icon" aria-hidden="true">✓</div>
+        <span id="taskCompleteKicker" class="section-kicker">任務完成</span>
+        <h2 id="taskCompleteTitle">任務已完成</h2>
+        <p id="taskCompleteBody"></p>
+        <div class="task-complete-actions">
+          <button class="secondary-button" type="button" data-close-task-complete>稍後再看</button>
+          <button id="taskCompleteAction" class="primary-button" type="button">查看結果</button>
+        </div>
+      </div>
+    </div>
     <div id="bugReportModal" class="bug-report-modal hidden" role="dialog" aria-modal="true" aria-labelledby="bugReportTitle">
       <button class="bug-report-backdrop" type="button" data-close-bug-report aria-label="關閉問題回報"></button>
       <section class="bug-report-dialog">
@@ -789,6 +802,6 @@
       <p id="bugEditorHint" class="bug-editor-hint">拖曳框選要保留的畫面範圍</p>
     </div>
 
-    <script src="/app.js?v=20260930-1" defer></script>
+    <script src="/app.js?v=20261001-1" defer></script>
   </body>
 </html>

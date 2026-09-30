@@ -354,6 +354,18 @@ document.querySelector("#signupForm").addEventListener("submit", submitSignupFor
 document.querySelector("#resendVerificationButton").addEventListener("click", resendVerificationEmail);
 document.querySelector("#createInviteCodeForm").addEventListener("submit", createInviteCode);
 document.querySelectorAll('input[type="email"]').forEach(attachEmailInputCleaner);
+document.querySelectorAll("[data-close-task-complete]").forEach((button) => button.addEventListener("click", hideTaskCompleteDialog));
+document.querySelector("#taskCompleteAction").addEventListener("click", () => {
+  const action = taskCompleteAction;
+  hideTaskCompleteDialog();
+  action?.();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !document.querySelector("#taskCompleteModal").classList.contains("hidden")) hideTaskCompleteDialog();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) document.title = baseDocumentTitle;
+});
 document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#workspaceSwitcher").addEventListener("change", (event) => switchWorkspace(event.target.value));
 document.querySelector("#createWorkspaceForm").addEventListener("submit", createWorkspace);
@@ -513,8 +525,10 @@ async function syncAdoptedOpportunity(handoff, workflowId) {
 }
 
 async function runWorkflow(options = {}) {
-  if (!state.workflow) return;
-  beginLiveWorkflowProgress(state.workflow, options.retryFailed ? "正在重試失敗階段" : "正在啟動 AI 工作流");
+  if (!state.workflow || workflowDriving) return;
+  workflowDriving = true;
+  if (!options.resumed) requestCompletionNotificationPermission();
+  beginLiveWorkflowProgress(state.workflow, options.resumed ? "正在接續上次的進度" : options.retryFailed ? "正在重試失敗階段" : "正在啟動 AI 工作流");
   try {
     if (state.workflow.status === "failed" && options.retryFailed) {
       state.workflow = await api(`/api/v1/workflows/${state.workflow.id}/advance`, { method: "POST" });
@@ -531,8 +545,10 @@ async function runWorkflow(options = {}) {
     updateLiveWorkflowProgress(state.workflow, { failed: true, detail: error.message || "執行暫時中斷，任務進度已保存。" });
     throw error;
   } finally {
+    workflowDriving = false;
     endLiveWorkflowProgress(state.workflow);
   }
+  notifyWorkflowFinished(state.workflow);
 }
 
 async function submitDecision(approved, action = approved ? "approve" : "reject") {
@@ -576,6 +592,7 @@ async function submitDecision(approved, action = approved ? "approve" : "reject"
       await runWorkflow();
     } else {
       renderWorkflow(state.workflow);
+      if (finalApproval && state.workflow.status === "completed") notifyWorkflowFinished(state.workflow);
     }
     await loadHistory();
   } catch (error) {
@@ -891,15 +908,26 @@ async function initializeAuthentication() {
       document.querySelector("#bugReportButton").classList.remove("hidden");
       return true;
     }
-    try {
-      const context = await publicAuthApi("/api/v1/auth/me");
-      applyAuthContext(context);
-      hideAuthScreen();
-      return true;
-    } catch {
-      showAuthScreen();
-      return false;
+    let lastError = null;
+    // Only a 401 means "signed out". A 5xx during a cold start or brief database
+    // hiccup must not bounce a signed-in user back to the login screen.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      try {
+        const context = await publicAuthApi("/api/v1/auth/me");
+        applyAuthContext(context);
+        hideAuthScreen();
+        return true;
+      } catch (error) {
+        lastError = error;
+        if (error.status === 401) break;
+        await delay(800 * (attempt + 1));
+      }
     }
+    showAuthScreen();
+    if (lastError && lastError.status !== 401) {
+      document.querySelector("#authMessage").textContent = "服務暫時忙碌，無法確認登入狀態。請稍候幾秒後重新整理頁面。";
+    }
+    return false;
   } catch (error) {
     state.authStatus = { authentication_required: true, bootstrap_available: false };
     showAuthScreen();
@@ -1851,15 +1879,20 @@ function showPromptCenterMessage(message, isError = false) {
 
 async function loadInviteCodes() {
   const panel = document.querySelector("#inviteCodePanel");
+  if (!state.authContext?.is_platform_owner) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
   try {
     state.inviteCodes = await api("/api/v1/invite-codes");
     panel.classList.remove("hidden");
     renderInviteCodes();
   } catch (error) {
-    // The server only answers platform owners; everyone else never sees the panel.
-    panel.classList.add("hidden");
     state.inviteCodes = [];
-    if (error.status !== 403) console.warn("invite codes unavailable", error);
+    // Keep the panel visible with a retry so owners are never left wondering where it went.
+    document.querySelector("#inviteCodeList").innerHTML = '<div class="prompt-empty">暫時無法讀取邀請碼。<button class="text-button" type="button" data-retry-invites>重新讀取</button></div>';
+    document.querySelector("[data-retry-invites]").addEventListener("click", loadInviteCodes);
   }
 }
 
@@ -2513,6 +2546,7 @@ async function generateOpportunities(options = {}) {
     return;
   }
   const requestId = ++opportunityRequestId;
+  requestCompletionNotificationPermission();
   state.opportunityGenerationBusy = true;
   button.disabled = true;
   button.textContent = "分析主題中…";
@@ -2533,6 +2567,13 @@ async function generateOpportunities(options = {}) {
     updatePageUrl("opportunities", result.id, true);
     await loadOpportunityHistory();
     showOpportunityMessage(`已產生 ${(result.opportunities || []).length} 個不同內容角度。所有條件與結果都已保存。`);
+    showTaskCompleteDialog({
+      kicker: "內容機會",
+      title: "選題探索完成",
+      body: `已為「${request.topic}」產生 ${(result.opportunities || []).length} 個內容角度，挑一個喜歡的就能直接建立任務。`,
+      actionLabel: "查看選題",
+      onAction: () => document.querySelector("#opportunityList")?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    });
   } catch (error) {
     if (requestId !== opportunityRequestId) return;
     document.querySelector("#opportunityList").innerHTML = `<div class="library-empty opportunity-error"><strong>內容機會產生失敗</strong><p>${escapeHtml(error.message || "目前無法連線本機服務。")}</p><div><button class="secondary-button" type="button" data-opportunity-reconnect>重新連線</button><button class="primary-button" type="button" data-opportunity-retry>重試產生</button></div></div>`;
@@ -5190,6 +5231,12 @@ async function pollLiveWorkflowProgress(workflowId) {
       renderWorkflow(latest);
       updateLiveWorkflowProgress(latest);
     }
+    if (workflowLooksUndriven(state.workflow)) resumeUndrivenWorkflow();
+    else if (!workflowDriving && state.workflow.status !== "running") {
+      // An earlier request (from before a reload) finished the stage on the server.
+      endLiveWorkflowProgress(state.workflow);
+      notifyWorkflowFinished(state.workflow);
+    }
   } catch {
     // The main mutation request remains authoritative; a missed poll is retried.
   } finally {
@@ -5202,7 +5249,7 @@ function beginLiveWorkflowProgress(workflow, heading = "正在啟動 AI 工作�
   if (liveProgressTimer) window.clearInterval(liveProgressTimer);
   if (liveProgressPollTimer) window.clearInterval(liveProgressPollTimer);
   if (liveProgressHideTimer) window.clearTimeout(liveProgressHideTimer);
-  liveProgressStartedAt = Date.now();
+  liveProgressStartedAt = workflowRunStartedAt(workflow);
   liveProgressPanel.classList.remove("hidden", "failed");
   updateLiveWorkflowProgress(workflow, { heading });
   liveProgressTimer = window.setInterval(() => updateLiveWorkflowProgress(state.workflow), 1000);
@@ -5222,6 +5269,111 @@ function endLiveWorkflowProgress(workflow) {
   document.querySelector("#liveProgressBar").style.width = "100%";
   document.querySelector("#liveProgressPercent").textContent = "100%";
   liveProgressHideTimer = window.setTimeout(() => liveProgressPanel.classList.add("hidden"), 2200);
+}
+
+let taskCompleteAction = null;
+const baseDocumentTitle = document.title;
+
+function requestCompletionNotificationPermission() {
+  // Asked once per session, from the click that starts a long task.
+  try {
+    if (!("Notification" in window) || Notification.permission !== "default") return;
+    if (window.sessionStorage.getItem("tackyflow:notification-asked")) return;
+    window.sessionStorage.setItem("tackyflow:notification-asked", "1");
+    Notification.requestPermission().catch(() => {});
+  } catch {}
+}
+
+function showTaskCompleteDialog({ kicker = "任務完成", title, body, actionLabel = "查看結果", onAction = null, needsReview = false }) {
+  document.querySelector("#taskCompleteKicker").textContent = kicker;
+  document.querySelector("#taskCompleteTitle").textContent = title;
+  document.querySelector("#taskCompleteBody").textContent = body;
+  document.querySelector("#taskCompleteAction").textContent = actionLabel;
+  document.querySelector(".task-complete-dialog").classList.toggle("needs-review", needsReview);
+  taskCompleteAction = onAction;
+  document.querySelector("#taskCompleteModal").classList.remove("hidden");
+  document.querySelector("#taskCompleteAction").focus();
+  if (document.hidden) {
+    document.title = `✓ ${title}｜${baseDocumentTitle}`;
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        const notification = new Notification(title, { body, tag: "tackyflow-task" });
+        notification.onclick = () => { window.focus(); notification.close(); };
+      }
+    } catch {}
+  }
+}
+
+function hideTaskCompleteDialog() {
+  document.querySelector("#taskCompleteModal").classList.add("hidden");
+  taskCompleteAction = null;
+}
+
+function notifyWorkflowFinished(workflow) {
+  if (!workflow || !["waiting_for_human", "completed"].includes(workflow.status)) return;
+  const elapsed = liveProgressStartedAt ? formatElapsed((Date.now() - liveProgressStartedAt) / 1000) : "";
+  const topic = workflow.input?.topic ? `「${workflow.input.topic}」` : "這個任務";
+  const completed = workflow.status === "completed";
+  const finalReview = workflow.human_request?.reason === "final_approval";
+  const took = elapsed ? `，花了 ${elapsed}` : "";
+  // The workflow pauses at the *next* stage's gate, so describe what the person must
+  // do now instead of naming the stage it is paused on.
+  const copy = completed
+    ? { kicker: "任務完成", title: "任務已完成", body: `${topic}已全部完成${took}。成果已保存，可以到發布中心安排發布時間。`, action: "前往發布中心", go: () => showPage("publishing") }
+    : finalReview
+      ? { kicker: "AI 製作完成", title: "內容已製作完成，等你最終核准", body: `${topic}的腳本與製作素材都完成了${took}。請預覽成果，核准後就能安排發布。`, action: "前往預覽與核准" }
+      : { kicker: "需要你確認", title: "AI 已完成這一段，等你確認", body: `${topic}已跑到需要人工判斷的地方${took}。請查看說明後核准或提出修改，AI 才會繼續。`, action: "前往確認" };
+  showTaskCompleteDialog({
+    kicker: copy.kicker,
+    title: copy.title,
+    body: copy.body,
+    actionLabel: copy.action,
+    needsReview: !completed,
+    onAction: copy.go || (() => document.querySelector("#decisionPanel:not(.hidden), #resultPanel:not(.hidden)")?.scrollIntoView({ behavior: "smooth", block: "start" })),
+  });
+}
+
+function workflowRunStartedAt(workflow) {
+  // Derive the run start from saved agent events so a reload does not reset the timer.
+  const log = workflow?.execution_log || [];
+  let earliest = null;
+  for (let index = log.length - 1; index >= 0; index -= 1) {
+    const entry = log[index];
+    if (!String(entry.event_type || "").startsWith("agent.") || entry.stage !== workflow.stage) break;
+    if (entry.event_type === "agent.started" && entry.occurred_at) earliest = entry.occurred_at;
+  }
+  const started = earliest ? new Date(earliest).getTime() : NaN;
+  return Number.isFinite(started) && Date.now() - started < 2 * 60 * 60 * 1000 ? started : Date.now();
+}
+
+// A workflow is advanced by this page calling /advance stage by stage. After a reload
+// nothing is driving it, so resume when the server is clearly idle.
+let workflowDriving = false;
+
+function workflowLooksUndriven(workflow) {
+  if (workflowDriving || workflow?.status !== "running") return false;
+  const log = workflow.execution_log || [];
+  const last = log[log.length - 1];
+  const lastAt = last?.occurred_at ? new Date(last.occurred_at).getTime() : 0;
+  const updatedAt = workflow.updated_at ? new Date(workflow.updated_at).getTime() : lastAt;
+  const idleSeconds = (Date.now() - Math.max(lastAt, updatedAt || 0)) / 1000;
+  // An agent that started recently may still be running inside an earlier request;
+  // requests are capped at 300 s, so after that it can be safely resumed.
+  if (last?.event_type === "agent.started") return idleSeconds > 320;
+  return idleSeconds > 20;
+}
+
+async function resumeUndrivenWorkflow() {
+  if (workflowDriving || !state.workflow) return;
+  setBusy(true, "正在接續 AI 工作流…");
+  showMessage("偵測到任務在重新整理前尚未跑完，已從上次保存的進度自動接續。", false);
+  try {
+    await runWorkflow({ resumed: true });
+  } catch (error) {
+    showMessage(error.message || "接續執行失敗，任務進度已保存，可稍後重試。", true);
+  } finally {
+    setBusy(false);
+  }
 }
 
 function escapeHtml(value) {
@@ -5623,6 +5775,12 @@ async function api(url, options = {}) {
     throw new Error("無法連線本機 Python 服務。請確認服務已啟動，再按「重新連線」。");
   }
   setEngineStatus("healthy");
+  const method = String(options.method || "GET").toUpperCase();
+  if (response.status >= 500 && method === "GET" && !options.retried) {
+    // Reads are safe to repeat; one retry hides a cold-start or pooler blip.
+    await delay(700);
+    return api(url, { ...options, retried: true });
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && state.authStatus?.authentication_required) {

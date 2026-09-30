@@ -146,6 +146,14 @@ def build_auth_router(
         if normalize_email(context.email) not in platform_owners:
             raise HTTPException(status_code=403, detail="platform owner access required")
 
+    def context_payload(context: SessionContext, workspaces: list[dict[str, Any]]) -> dict[str, Any]:
+        # Lets the UI show owner-only tools without probing endpoints; every
+        # owner-only endpoint still enforces the check server-side.
+        return {
+            **_context_payload(context, workspaces),
+            "is_platform_owner": normalize_email(context.email) in platform_owners,
+        }
+
     async def record_auth_event(
         context: SessionContext,
         event_name: str,
@@ -205,7 +213,7 @@ def build_auth_router(
         await record_auth_event(result.context, "auth.signup")
         return {
             "verification_required": False,
-            **_context_payload(result.context, await repository.list_workspaces(result.context.user_id)),
+            **context_payload(result.context, await repository.list_workspaces(result.context.user_id)),
         }
 
     @router.post("/auth/signup/resend", status_code=status.HTTP_202_ACCEPTED)
@@ -240,7 +248,7 @@ def build_auth_router(
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         _set_session_cookie(response, raw_token)
         await record_auth_event(context, "auth.bootstrap")
-        return _context_payload(
+        return context_payload(
             context, await repository.list_workspaces(context.user_id)
         )
 
@@ -265,7 +273,7 @@ def build_auth_router(
             ) from exc
         _set_session_cookie(response, raw_token)
         await record_auth_event(context, "auth.login")
-        return _context_payload(
+        return context_payload(
             context, await repository.list_workspaces(context.user_id)
         )
 
@@ -309,7 +317,7 @@ def build_auth_router(
     async def me(
         context: SessionContext = Depends(resolve_session_context),
     ) -> dict[str, Any]:
-        return _context_payload(
+        return context_payload(
             context, await repository.list_workspaces(context.user_id)
         )
 
@@ -425,7 +433,7 @@ def build_auth_router(
         except AuthorizationError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         await record_auth_event(updated, "workspace.switched")
-        return _context_payload(
+        return context_payload(
             updated, await repository.list_workspaces(updated.user_id)
         )
 

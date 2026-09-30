@@ -4,6 +4,8 @@ from pathlib import Path
 
 import psycopg
 
+from app.db.postgres import lock_schema_setup
+
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 
@@ -17,6 +19,7 @@ def apply_migrations(database_url: str) -> list[str]:
 
     applied: list[str] = []
     with psycopg.connect(database_url, autocommit=False) as connection:
+        lock_schema_setup(connection)
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS ai_schema_migrations (

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import psycopg
 
-from app.db.postgres import get_pool
+from app.db.postgres import get_pool, lock_schema_setup
 from app.prompts.repository import PLATFORM_PROMPT_SCOPE
 
 
@@ -107,6 +107,7 @@ class PostgresPromptTestRepository:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
         with self._connect() as connection:
+            lock_schema_setup(connection)
             connection.execute("""CREATE TABLE IF NOT EXISTS py_prompt_test_cases (
                 id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, prompt_key TEXT NOT NULL,
                 name TEXT NOT NULL, input_text TEXT NOT NULL, rubric TEXT NOT NULL,

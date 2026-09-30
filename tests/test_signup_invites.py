@@ -66,6 +66,7 @@ def test_invite_signup_creates_isolated_workspace_without_platform_access(
     assert owner.get("/api/v1/auth/status").json()["signup_available"] is False
     owner_csrf = owner.post("/api/v1/auth/bootstrap", json=OWNER).json()["csrf_token"]
     assert owner.get("/api/v1/auth/status").json()["signup_available"] is True
+    assert owner.get("/api/v1/auth/me").json()["is_platform_owner"] is True
 
     created = owner.post(
         "/api/v1/invite-codes",
@@ -85,6 +86,7 @@ def test_invite_signup_creates_isolated_workspace_without_platform_access(
     assert signed_up.status_code == 201
     body = signed_up.json()
     assert body["verification_required"] is False
+    assert body["is_platform_owner"] is False
     assert body["workspace"]["id"] != "default"
     assert body["workspace"]["role"] == "owner"
     assert [workspace["id"] for workspace in body["workspaces"]] == [body["workspace"]["id"]]
