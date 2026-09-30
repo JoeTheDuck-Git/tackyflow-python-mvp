@@ -353,6 +353,7 @@ document.querySelector("#showSignupButton").addEventListener("click", () => show
 document.querySelector("#signupForm").addEventListener("submit", submitSignupForm);
 document.querySelector("#resendVerificationButton").addEventListener("click", resendVerificationEmail);
 document.querySelector("#createInviteCodeForm").addEventListener("submit", createInviteCode);
+document.querySelectorAll('input[type="email"]').forEach(attachEmailInputCleaner);
 document.querySelector("#logoutButton").addEventListener("click", logout);
 document.querySelector("#workspaceSwitcher").addEventListener("change", (event) => switchWorkspace(event.target.value));
 document.querySelector("#createWorkspaceForm").addEventListener("submit", createWorkspace);
@@ -788,14 +789,14 @@ function showAuthMode(mode) {
     document.querySelector("#authDescription").textContent = "輸入邀請碼建立帳號。你會得到自己專屬的工作區，資料只有你和你邀請的成員看得到。";
     document.querySelector("#signupMessage").textContent = "";
     document.querySelector("#signupMessage").classList.remove("success");
-    document.querySelector("#signupEmail").value ||= document.querySelector("#authEmail").value.trim();
+    document.querySelector("#signupEmail").value ||= cleanEmailInput(document.querySelector("#authEmail").value);
     document.querySelector("#signupInviteCode").focus();
     return;
   }
   if (mode === "request-reset") {
     document.querySelector("#authTitle").textContent = "重設密碼";
     document.querySelector("#authDescription").textContent = "輸入帳號電子郵件，我們會寄出一次性的安全重設連結。";
-    document.querySelector("#passwordResetEmail").value = document.querySelector("#authEmail").value.trim();
+    document.querySelector("#passwordResetEmail").value = cleanEmailInput(document.querySelector("#authEmail").value);
     document.querySelector("#passwordResetRequestMessage").textContent = "";
     document.querySelector("#passwordResetRequestMessage").classList.remove("success");
     document.querySelector("#passwordResetEmail").focus();
@@ -816,9 +817,23 @@ function showAuthMode(mode) {
   document.querySelector("#authEmail").focus();
 }
 
+function cleanEmailInput(value) {
+  // Mirrors the server's normalize_email: full-width to ASCII, then drop whitespace and
+  // invisible format characters copied in from chat apps or documents.
+  return String(value || "").normalize("NFKC").replace(/[\s\p{Cf}]/gu, "");
+}
+
+function attachEmailInputCleaner(input) {
+  input.addEventListener("input", (event) => {
+    if (event.isComposing) return;
+    const cleaned = cleanEmailInput(input.value);
+    if (cleaned !== input.value) input.value = cleaned;
+  });
+}
+
 function restoreRememberedLoginEmail() {
   try {
-    const email = window.localStorage.getItem(rememberedLoginEmailKey) || "";
+    const email = cleanEmailInput(window.localStorage.getItem(rememberedLoginEmailKey));
     document.querySelector("#rememberCredentials").checked = Boolean(email);
     if (email && !document.querySelector("#authEmail").value) document.querySelector("#authEmail").value = email;
   } catch {
@@ -901,7 +916,7 @@ async function submitAuthForm(event) {
   button.disabled = true;
   message.textContent = bootstrap ? "正在建立安全工作區…" : "正在登入…";
   try {
-    const email = document.querySelector("#authEmail").value.trim();
+    const email = cleanEmailInput(document.querySelector("#authEmail").value);
     const password = document.querySelector("#authPassword").value;
     const payload = {
       email,
@@ -930,7 +945,7 @@ async function submitSignupForm(event) {
   event.preventDefault();
   const button = document.querySelector("#signupSubmitButton");
   const message = document.querySelector("#signupMessage");
-  const email = document.querySelector("#signupEmail").value.trim();
+  const email = cleanEmailInput(document.querySelector("#signupEmail").value);
   const password = document.querySelector("#signupPassword").value;
   message.classList.remove("success");
   if (password !== document.querySelector("#signupPasswordConfirm").value) {
@@ -971,7 +986,7 @@ async function submitSignupForm(event) {
 
 async function resendVerificationEmail() {
   const message = document.querySelector("#authMessage");
-  const email = document.querySelector("#authEmail").value.trim();
+  const email = cleanEmailInput(document.querySelector("#authEmail").value);
   if (!email) {
     message.classList.remove("success");
     message.textContent = "請先輸入註冊時使用的電子郵件。";
@@ -997,7 +1012,7 @@ async function submitPasswordResetRequest(event) {
   try {
     const result = await publicAuthApi("/api/v1/auth/password-reset/request", {
       method: "POST",
-      body: JSON.stringify({ email: document.querySelector("#passwordResetEmail").value.trim() }),
+      body: JSON.stringify({ email: cleanEmailInput(document.querySelector("#passwordResetEmail").value) }),
     });
     message.classList.add("success");
     message.textContent = result.message || "若帳號存在，系統已寄出密碼重設連結。";
@@ -1105,7 +1120,7 @@ async function addWorkspaceMember(event) {
       method: "POST",
       body: JSON.stringify({
         display_name: document.querySelector("#memberDisplayName").value.trim(),
-        email: document.querySelector("#memberEmail").value.trim(),
+        email: cleanEmailInput(document.querySelector("#memberEmail").value),
         password: document.querySelector("#memberPassword").value,
         role: document.querySelector("#memberRole").value,
       }),

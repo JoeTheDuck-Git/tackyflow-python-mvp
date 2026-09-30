@@ -182,3 +182,25 @@ async def test_supabase_login_reports_unverified_email(monkeypatch: pytest.Monke
     )
     with pytest.raises(EmailNotVerifiedError):
         await repository._supabase_login("a@example.com", "password-1234567")
+
+
+def test_email_normalization_strips_invisible_and_full_width_characters() -> None:
+    from app.auth.repository import normalize_email
+
+    assert normalize_email(" Owner@\u200bExample.com\u00a0") == "owner@example.com"
+    assert normalize_email("owner\ufeff@gmail\u2060.com") == "owner@gmail.com"
+    assert normalize_email("ｏｗｎｅｒ＠ｅｘａｍｐｌｅ．ｃｏｍ") == "owner@example.com"
+
+
+def test_login_accepts_email_pasted_with_zero_width_space(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app, _ = _session_app(tmp_path, monkeypatch)
+    client = TestClient(app)
+    assert client.post("/api/v1/auth/bootstrap", json=OWNER).status_code == 201
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "owner@example\u200b.com", "password": OWNER["password"]},
+    )
+    assert login.status_code == 200
+    assert login.json()["user"]["email"] == "owner@example.com"

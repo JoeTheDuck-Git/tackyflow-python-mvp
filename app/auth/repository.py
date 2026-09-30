@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -74,7 +75,15 @@ class SignupResult:
 
 
 def normalize_email(value: str) -> str:
-    return value.strip().casefold()
+    # NFKC folds full-width characters (＠, ｇｍａｉｌ) to ASCII; then drop whitespace and
+    # invisible format characters (zero-width spaces, BOM, soft hyphens) that sneak in
+    # when an address is copied from chat apps or documents.
+    folded = unicodedata.normalize("NFKC", value)
+    return "".join(
+        character
+        for character in folded
+        if not character.isspace() and unicodedata.category(character) != "Cf"
+    ).casefold()
 
 
 INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
