@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -149,6 +150,9 @@ def test_pipeline_stage_management_preserves_consistency_and_can_delete(tmp_path
 
 
 def test_publication_status_requires_approval_and_persists(tmp_path) -> None:
+    # Must stay in the future: the API rejects schedules in the past.
+    scheduled_at = (datetime.now(timezone.utc) + timedelta(days=30)).replace(microsecond=0)
+    scheduled_text = scheduled_at.strftime("%Y-%m-%dT%H:%M:%SZ")
     database_path = tmp_path / "publication-workflows.db"
     client, _ = build_test_client(database_path)
     created = client.post(
@@ -165,7 +169,7 @@ def test_publication_status_requires_approval_and_persists(tmp_path) -> None:
 
     blocked = client.patch(
         f"/api/v1/workflows/{workflow_id}/publication",
-        json={"status": "scheduled", "scheduled_at": "2026-10-01T10:00:00Z"},
+        json={"status": "scheduled", "scheduled_at": scheduled_text},
     )
     assert blocked.status_code == 409
 
@@ -181,7 +185,7 @@ def test_publication_status_requires_approval_and_persists(tmp_path) -> None:
         f"/api/v1/workflows/{workflow_id}/publication",
         json={
             "status": "scheduled",
-            "scheduled_at": "2026-10-01T10:00:00Z",
+            "scheduled_at": scheduled_text,
             "note": "安排首波發布",
         },
     )
@@ -193,7 +197,7 @@ def test_publication_status_requires_approval_and_persists(tmp_path) -> None:
     recreated_repository = SQLiteWorkflowRepository(database_path)
     restored = asyncio.run(recreated_repository.get(workflow_id))
     assert restored.artifacts["publication"]["status"] == "scheduled"
-    assert restored.artifacts["publication"]["scheduled_at"].startswith("2026-10-01T10:00:00")
+    assert restored.artifacts["publication"]["scheduled_at"].startswith(scheduled_text[:19])
 
     published = client.patch(
         f"/api/v1/workflows/{workflow_id}/publication",
