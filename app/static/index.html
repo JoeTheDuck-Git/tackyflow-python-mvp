@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=20261001-1" />
+    <link rel="stylesheet" href="/styles.css?v=20261001-2" />
   </head>
   <body>
     <section id="authScreen" class="auth-screen hidden" aria-label="登入">
@@ -509,15 +509,6 @@
                   </label>
                 </div>
 
-                <div class="field-row">
-                  <label class="field"><span>目標受眾</span><input id="targetAudience" maxlength="500" placeholder="例如：品牌行銷與內容團隊" /></label>
-                  <label class="field"><span>品牌名稱</span><input id="brandName" maxlength="200" placeholder="選填" /></label>
-                </div>
-                <div class="field-row">
-                  <label class="field"><span>語言</span><select id="contentLanguage"><option value="繁體中文">繁體中文</option><option value="簡體中文">簡體中文</option><option value="英文">英文</option></select></label>
-                  <label class="field"><span>地區</span><input id="contentRegion" maxlength="100" value="台灣" /></label>
-                </div>
-
                 <div class="field-row length-row">
                   <label class="field">
                     <span>目標字數 *</span>
@@ -540,15 +531,33 @@
                   </div>
                 </fieldset>
 
-                <label class="field field-full">
-                  <span>品牌語氣</span>
-                  <input id="brandVoice" value="專業、清楚，但保有自然的對話感" maxlength="500" />
-                </label>
+                <details id="advancedSettingsSection" class="reference-section">
+                  <summary>
+                    <span><b>＋</b><strong>進階設定</strong><small>選填</small></span>
+                    <em id="advancedSettingsSummary">受眾、品牌、語言、地區、語氣與限制</em>
+                  </summary>
+                  <div class="reference-body">
+                  <div class="field-row">
+                    <label class="field"><span>目標受眾</span><input id="targetAudience" maxlength="500" placeholder="例如：品牌行銷與內容團隊" /></label>
+                    <label class="field"><span>品牌名稱</span><input id="brandName" maxlength="200" placeholder="選填" /></label>
+                  </div>
+                  <div class="field-row">
+                    <label class="field"><span>語言</span><select id="contentLanguage"><option value="繁體中文">繁體中文</option><option value="簡體中文">簡體中文</option><option value="英文">英文</option></select></label>
+                    <label class="field"><span>地區</span><input id="contentRegion" maxlength="100" value="台灣" /></label>
+                  </div>
 
-                <label class="field field-full">
-                  <span>限制與注意事項</span>
-                  <textarea id="constraints" class="short-textarea" placeholder="每行一項，例如：不要使用過度誇張的說法"></textarea>
-                </label>
+                  <label class="field field-full">
+                    <span>品牌語氣</span>
+                    <input id="brandVoice" value="專業、清楚，但保有自然的對話感" maxlength="500" />
+                  </label>
+
+                  <label class="field field-full">
+                    <span>限制與注意事項</span>
+                    <textarea id="constraints" class="short-textarea" placeholder="每行一項，例如：不要使用過度誇張的說法"></textarea>
+                  </label>
+
+                  </div>
+                </details>
 
                 <details id="referenceSection" class="reference-section">
                   <summary>
@@ -629,7 +638,10 @@
                   <div><strong>AI 會自動決定執行路線</strong><p>依主題風險與內容需求，動態安排研究、驗證、撰寫及品質檢查代理。</p></div>
                 </div>
 
-                <button id="submitButton" class="primary-button" type="submit"><span>開始 AI 製作</span><b>→</b></button>
+                <div class="submit-bar">
+                  <small id="submitHint" class="submit-hint hidden">目前顯示的是已建立的任務。按下會用上方需求另外建立一個新任務，不會影響原任務。</small>
+                  <button id="submitButton" class="primary-button" type="submit"><span>開始 AI 製作</span><b>→</b></button>
+                </div>
               </form>
             </section>
 
@@ -662,16 +674,6 @@
                 <div class="efficiency-footer"><span>預估減少人工操作</span><strong>約 70%</strong></div>
               </section>
 
-              <section id="decisionPanel" class="panel decision-panel hidden">
-                <div class="decision-icon">!</div>
-                <div><span id="decisionStepBadge" class="decision-step-badge">人工核准</span><span class="section-kicker warning">需要你的決定</span><h3 id="decisionQuestion">內容需要人工確認</h3><p id="decisionSuggestion"></p></div>
-                <label class="decision-feedback"><span>審核意見</span><textarea id="decisionFeedback" maxlength="2000" placeholder="若要修改，請說明要調整的段落、語氣或事實"></textarea></label>
-                <div class="decision-actions">
-                  <button id="rejectButton" class="danger-button">退回任務</button>
-                  <button id="requestChangesButton" class="secondary-button">要求修改</button>
-                  <button id="approveButton" class="primary-button small">核准此內容</button>
-                </div>
-              </section>
             </aside>
           </div>
 
@@ -689,6 +691,17 @@
             </button>
             <div id="executionLogBody" class="execution-log-body">
               <ol id="executionLogList" class="execution-log-list"></ol>
+            </div>
+          </section>
+
+          <section id="decisionPanel" class="panel decision-panel decision-panel-wide hidden">
+            <div class="decision-icon">!</div>
+            <div><span id="decisionStepBadge" class="decision-step-badge">人工核准</span><span class="section-kicker warning">需要你的決定</span><h3 id="decisionQuestion">內容需要人工確認</h3><p id="decisionSuggestion"></p></div>
+            <label class="decision-feedback"><span>審核意見</span><textarea id="decisionFeedback" maxlength="2000" placeholder="若要修改，請說明要調整的段落、語氣或事實"></textarea></label>
+            <div class="decision-actions">
+              <button id="rejectButton" class="danger-button">退回任務</button>
+              <button id="requestChangesButton" class="secondary-button">要求修改</button>
+              <button id="approveButton" class="primary-button small">核准此內容</button>
             </div>
           </section>
 
@@ -802,6 +815,6 @@
       <p id="bugEditorHint" class="bug-editor-hint">拖曳框選要保留的畫面範圍</p>
     </div>
 
-    <script src="/app.js?v=20261001-1" defer></script>
+    <script src="/app.js?v=20261001-2" defer></script>
   </body>
 </html>

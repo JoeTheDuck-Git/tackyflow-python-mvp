@@ -71,6 +71,8 @@ let workspaceScriptSnippetsDraft = [];
 
 const workbenchDraftStoragePrefix = "tackyflow:workbench-draft:v2";
 const rememberedLoginEmailKey = "tackyflow:remembered-login-email:v1";
+const advancedSettingDefaults = { targetAudience: "", brandName: "", contentLanguage: "繁體中文", contentRegion: "台灣", brandVoice: "專業、清楚，但保有自然的對話感", constraints: "" };
+const advancedSettingLabels = { targetAudience: "受眾", brandName: "品牌", contentLanguage: "語言", contentRegion: "地區", brandVoice: "語氣", constraints: "限制" };
 function adoptionRetryStorageKey() { return `tackyflow:adoption-retry:v1:${state.workspaceId}`; }
 const workbenchDraftFieldIds = [
   "topic", "goal", "outputType", "targetWordCount", "brandVoice", "constraints",
@@ -354,6 +356,10 @@ document.querySelector("#signupForm").addEventListener("submit", submitSignupFor
 document.querySelector("#resendVerificationButton").addEventListener("click", resendVerificationEmail);
 document.querySelector("#createInviteCodeForm").addEventListener("submit", createInviteCode);
 document.querySelectorAll('input[type="email"]').forEach(attachEmailInputCleaner);
+Object.keys(advancedSettingDefaults).forEach((id) => {
+  document.querySelector(`#${id}`)?.addEventListener("input", () => syncAdvancedSettingsSummary());
+  document.querySelector(`#${id}`)?.addEventListener("change", () => syncAdvancedSettingsSummary());
+});
 document.querySelectorAll("[data-close-task-complete]").forEach((button) => button.addEventListener("click", hideTaskCompleteDialog));
 document.querySelector("#taskCompleteAction").addEventListener("click", () => {
   const action = taskCompleteAction;
@@ -615,6 +621,7 @@ function setDecisionButtonsBusy(busy, approved, finalApproval) {
 }
 
 function renderWorkflow(workflow) {
+  syncSubmitButton();
   resetAgentStates();
   setStage(workflow.stage);
   updateResultAction(workflow);
@@ -4305,6 +4312,7 @@ function populateForm(input) {
     ? "先前上傳的檔案內容已保存在此任務紀錄中"
     : "尚未選擇檔案";
   document.querySelector("#referenceSection").toggleAttribute("open", Boolean(materials.length));
+  syncAdvancedSettingsSummary({ openIfCustomized: true });
   wordCountTouched = true;
   updateEstimatedDuration();
 }
@@ -5641,6 +5649,9 @@ function resetInterface() {
   document.querySelector("#referenceFileList").textContent = "尚未選擇檔案";
   renderReferenceFileReview();
   document.querySelector("#referenceSection").removeAttribute("open");
+  document.querySelector("#advancedSettingsSection").removeAttribute("open");
+  syncAdvancedSettingsSummary();
+  syncSubmitButton();
   document.querySelectorAll(".platform-chip").forEach((chip, index) => {
     chip.querySelector("input").checked = index === 0;
     chip.classList.toggle("selected", index === 0);
@@ -5673,7 +5684,34 @@ function resetInterface() {
 function setBusy(busy, label = "") {
   state.busy = busy;
   submitButton.disabled = busy;
-  submitButton.querySelector("span").textContent = busy ? label : "開始 AI 製作";
+  submitButton.querySelector("span").textContent = busy ? label : submitIdleLabel();
+}
+
+function submitIdleLabel() {
+  return state.workflow ? "以這份需求建立新任務" : "開始 AI 製作";
+}
+
+function syncSubmitButton() {
+  // With a task open, submitting creates a *new* task from the form; say so, and
+  // hide the button while that task is still running so it is not started twice.
+  const loaded = Boolean(state.workflow);
+  submitButton.classList.toggle("primary-button", !loaded);
+  submitButton.classList.toggle("secondary-button", loaded);
+  submitButton.classList.toggle("hidden", state.workflow?.status === "running");
+  document.querySelector("#submitHint").classList.toggle("hidden", !loaded || state.workflow?.status === "running");
+  if (!state.busy) submitButton.querySelector("span").textContent = submitIdleLabel();
+}
+
+
+function syncAdvancedSettingsSummary({ openIfCustomized = false } = {}) {
+  const customized = Object.keys(advancedSettingDefaults).filter((id) => {
+    const value = document.querySelector(`#${id}`)?.value.trim() || "";
+    return value && value !== advancedSettingDefaults[id];
+  });
+  document.querySelector("#advancedSettingsSummary").textContent = customized.length
+    ? `已設定：${customized.map((id) => advancedSettingLabels[id]).join("、")}`
+    : "受眾、品牌、語言、地區、語氣與限制";
+  if (openIfCustomized && customized.length) document.querySelector("#advancedSettingsSection").open = true;
 }
 
 function showMessage(message, isError = false, action = null) {

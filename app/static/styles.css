@@ -1560,3 +1560,28 @@ body { font-size: 16px; line-height: 1.55; }
 .task-complete-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
 @keyframes task-complete-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .task-complete-dialog { animation: none; } }
+
+/* Required fields stay visible; optional ones fold into 進階設定. */
+#advancedSettingsSection { margin-top: 4px; }
+
+/* Keep the start button reachable while scrolling a long form. */
+.submit-bar { position: sticky; bottom: 0; z-index: 6; display: grid; gap: 8px; margin: 4px -4px -4px; padding: 12px 4px 4px; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 28%); }
+.submit-hint { color: #64748b; font-size: 12px; line-height: 1.55; }
+.submit-bar #submitButton.secondary-button { width: 100%; min-height: 46px; justify-content: center; }
+
+/* Approval sits full width right above the results it refers to. */
+.decision-panel-wide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 14px 24px; align-items: start; margin-bottom: 20px; padding: 22px 24px; }
+.decision-panel-wide .decision-icon { position: static; grid-row: 1; width: 30px; height: 30px; font-size: 14px; display: none; }
+.decision-panel-wide > div:not(.decision-icon):not(.decision-actions) { grid-column: 1; }
+.decision-panel-wide h3 { margin-right: 0; font-size: 18px; }
+.decision-panel-wide p { font-size: 13px; }
+.decision-panel-wide .decision-feedback { grid-column: 2; grid-row: 1 / span 2; }
+.decision-panel-wide .decision-feedback textarea { min-height: 92px; }
+.decision-panel-wide .decision-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 0; }
+.decision-panel-wide .decision-actions button { flex: 0 0 auto; min-width: 128px; min-height: 42px; white-space: nowrap; }
+@media (max-width: 900px) {
+  .decision-panel-wide { grid-template-columns: 1fr; padding: 18px; }
+  .decision-panel-wide .decision-feedback { grid-column: 1; grid-row: auto; }
+  .decision-panel-wide .decision-actions { flex-direction: column; }
+  .decision-panel-wide .decision-actions button { width: 100%; }
+}
